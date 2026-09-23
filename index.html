@@ -282,6 +282,81 @@ button { font-family: inherit; }
 .bootstrap-card { max-width: 440px; }
 .bootstrap-card p { color: var(--slate); font-size: 0.9rem; line-height: 1.5; }
 
+/* ---------- Management views (classes/subjects/teachers/students) ---------- */
+.view-toolbar {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.view-toolbar .search-input {
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-s);
+  background: var(--paper-2);
+  color: var(--ink);
+  font-size: 0.9rem;
+  min-width: 200px;
+}
+.form-panel {
+  display: none;
+  margin-bottom: 18px;
+}
+.form-panel.open { display: block; }
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px 16px;
+}
+.form-grid .field { margin-bottom: 0; }
+.form-actions { display: flex; gap: 10px; margin-top: 18px; }
+.form-actions .btn { width: auto; padding: 10px 18px; }
+.checkbox-row { display: flex; flex-wrap: wrap; gap: 10px 16px; margin-top: 6px; }
+.checkbox-row label { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; color: var(--slate); font-weight: normal; }
+
+.data-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+.data-table th, .data-table td {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+.data-table th { color: var(--slate-light); font-weight: 600; font-size: 0.78rem; text-transform: none; }
+.table-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius-m); background: var(--paper-2); }
+.table-scroll .data-table { border: none; }
+.table-scroll .panel-inner-pad { padding: 4px 0; }
+
+.badge {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 0.76rem;
+}
+.badge.active { background: #e6f2ea; color: var(--good); }
+.badge.inactive { background: #f2e6e6; color: var(--bad); }
+:root[data-theme="dark"] .badge.active, @media (prefers-color-scheme: dark) { .badge.active { background: #163523; } }
+:root[data-theme="dark"] .badge.inactive, @media (prefers-color-scheme: dark) { .badge.inactive { background: #351616; } }
+
+.row-actions { display: flex; gap: 8px; }
+.row-actions button {
+  background: none; border: none; cursor: pointer;
+  color: var(--brass-dark); font-size: 0.82rem; padding: 0;
+}
+.row-actions button.danger { color: var(--bad); }
+
+.temp-pass-box {
+  background: #fbf3e3;
+  border: 1px solid #ecd9ac;
+  border-radius: var(--radius-s);
+  padding: 12px 14px;
+  font-size: 0.86rem;
+  margin-bottom: 16px;
+}
+:root[data-theme="dark"] .temp-pass-box, @media (prefers-color-scheme: dark) { .temp-pass-box { background: #2e2712; border-color: #4a3d1a; } }
+.temp-pass-box code { background: rgba(0,0,0,0.06); padding: 2px 6px; border-radius: 3px; }
+
 /* ---------- Responsive ---------- */
 @media (max-width: 760px) {
   .app-shell.active { grid-template-columns: 1fr; }
@@ -332,6 +407,44 @@ button { font-family: inherit; }
 
     <div class="link-row">
       <a href="#" id="show-reset">Forgot password?</a>
+      <a href="#" id="show-signup">Register a school</a>
+    </div>
+  </div>
+</div>
+
+<!-- ===== SCHOOL SIGN-UP SCREEN ===== -->
+<div id="screen-signup" class="auth-wrap" style="display:none;">
+  <div class="auth-card bootstrap-card">
+    <p class="auth-brand">Register your school</p>
+    <p class="auth-tagline">Creates your school and signs you in as its School Admin.</p>
+
+    <div id="signup-error" class="form-error"></div>
+
+    <form id="signup-form">
+      <div class="field">
+        <label for="su-school-name">School name</label>
+        <input id="su-school-name" type="text" required placeholder="e.g. Bright Path Academy" />
+      </div>
+      <div class="field">
+        <label for="su-admin-name">Your full name</label>
+        <input id="su-admin-name" type="text" required placeholder="e.g. Wisdom Ebube Daniel" />
+      </div>
+      <div class="field">
+        <label for="su-email">Email</label>
+        <input id="su-email" type="email" required autocomplete="username" />
+      </div>
+      <div class="field">
+        <label for="su-password">Password</label>
+        <input id="su-password" type="password" required minlength="6" autocomplete="new-password" />
+      </div>
+      <div class="field">
+        <label for="su-password-confirm">Confirm password</label>
+        <input id="su-password-confirm" type="password" required minlength="6" autocomplete="new-password" />
+      </div>
+      <button type="submit" class="btn brass" id="signup-submit">Create school &amp; sign up</button>
+    </form>
+    <div class="link-row">
+      <a href="#" id="signup-show-login">Already have an account? Log in</a>
       <span></span>
     </div>
   </div>
@@ -360,11 +473,11 @@ button { font-family: inherit; }
   </div>
 </div>
 
-<!-- ===== FIRST-RUN BOOTSTRAP SCREEN (initial admin only) ===== -->
+<!-- ===== FALLBACK SCHOOL-SETUP SCREEN (recovery path if signup was interrupted) ===== -->
 <div id="screen-bootstrap" class="auth-wrap" style="display:none;">
   <div class="auth-card bootstrap-card">
-    <p class="auth-brand">Initialize your school</p>
-    <p>You're signed in as the platform's initial admin account, but no school has been set up yet. Enter your school's details once — this creates the school record and links your account as its School Admin. This screen only ever appears for this one account, one time.</p>
+    <p class="auth-brand">Finish setting up your school</p>
+    <p>Your account is signed in, but no school is linked to it yet — this can happen if setup was interrupted. Enter your school's details once to finish linking your account as its School Admin.</p>
 
     <div id="bootstrap-error" class="form-error"></div>
 
@@ -426,7 +539,7 @@ button { font-family: inherit; }
 // EduNexa — Firebase initialization
 // Uses Firebase v10 modular SDK via CDN (see index.html <script type="module"> imports).
 
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+import { initializeApp, deleteApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
 import {
   getAuth,
   setPersistence,
@@ -456,11 +569,6 @@ const db = getFirestore(app);
 // Keep users signed in across page reloads/tabs.
 setPersistence(auth, browserLocalPersistence);
 
-// The one email allowed to run the first-run bootstrap (create the first
-// school + link itself as School Admin). Mirrored in Firestore Security Rules —
-// changing it here does NOT relax security, the rules are the real gate.
-const INITIAL_ADMIN_EMAIL = "wisdomebubedaniel2009@gmail.com";
-
 // ==================== app.js ====================
 
 // app.js — EduNexa Phase 1
@@ -470,6 +578,7 @@ const INITIAL_ADMIN_EMAIL = "wisdomebubedaniel2009@gmail.com";
 import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
   signOut,
   sendPasswordResetEmail,
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
@@ -477,8 +586,39 @@ import {
   doc,
   getDoc,
   setDoc,
+  updateDoc,
+  collection,
+  query,
+  where,
+  getDocs,
+  getCountFromServer,
   serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+
+// ---------- create a teacher/student Auth account without signing the
+// admin out. Firebase's client SDK signs in as whatever user it creates,
+// which would kick the admin out of their own session — so we spin up a
+// throwaway secondary app instance just for the create call, then tear
+// it down. The admin's primary session (the `auth` above) is untouched. ----------
+async function createManagedAuthUser(email, password) {
+  const secondary = initializeApp(firebaseConfig, `secondary-${Date.now()}`);
+  const secondaryAuth = getAuth(secondary);
+  try {
+    const cred = await createUserWithEmailAndPassword(secondaryAuth, email, password);
+    const uid = cred.user.uid;
+    await signOut(secondaryAuth);
+    return uid;
+  } finally {
+    await deleteApp(secondary);
+  }
+}
+
+function generateTempPassword() {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+  let out = "";
+  for (let i = 0; i < 10; i++) out += chars[Math.floor(Math.random() * chars.length)];
+  return out;
+}
 
 // ---------- tiny DOM helpers ----------
 const $ = (id) => document.getElementById(id);
@@ -486,7 +626,7 @@ const show = (el) => (el.style.display = "");
 const hide = (el) => (el.style.display = "none");
 
 function showScreen(name) {
-  ["splash", "screen-login", "screen-reset", "screen-bootstrap"].forEach((id) => hide($(id)));
+  ["splash", "screen-login", "screen-signup", "screen-reset", "screen-bootstrap"].forEach((id) => hide($(id)));
   $("app-shell").classList.remove("active");
   if (name === "app") {
     $("app-shell").classList.add("active");
@@ -539,6 +679,8 @@ function authErrorMessage(err) {
     "auth/operation-not-allowed": "Email/Password sign-in isn't enabled yet (Authentication → Sign-in method).",
     "auth/api-key-not-valid.-please-pass-a-valid-api-key.": "Firebase API key looks invalid — check firebaseConfig.",
     "auth/user-disabled": "This account has been disabled.",
+    "auth/email-already-in-use": "An account with that email already exists.",
+    "auth/weak-password": "Password should be at least 6 characters.",
   };
   // Show the raw code too — on mobile there's no easy console to check, so
   // this is the fastest way to see exactly what Firebase is rejecting.
@@ -575,6 +717,75 @@ $("show-reset").addEventListener("click", (e) => {
 $("show-login").addEventListener("click", (e) => {
   e.preventDefault();
   showScreen("screen-login");
+});
+$("show-signup").addEventListener("click", (e) => {
+  e.preventDefault();
+  showScreen("screen-signup");
+});
+$("signup-show-login").addEventListener("click", (e) => {
+  e.preventDefault();
+  showScreen("screen-login");
+});
+
+// ================= SCHOOL SIGN-UP =================
+$("signup-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const errBox = $("signup-error");
+  errBox.classList.remove("show");
+
+  const schoolName = $("su-school-name").value.trim();
+  const adminName = $("su-admin-name").value.trim();
+  const email = $("su-email").value.trim();
+  const password = $("su-password").value;
+  const confirm = $("su-password-confirm").value;
+
+  if (password !== confirm) {
+    errBox.textContent = "Passwords don't match.";
+    errBox.classList.add("show");
+    return;
+  }
+
+  const btn = $("signup-submit");
+  btn.disabled = true;
+  btn.textContent = "Setting up your school…";
+
+  try {
+    const cred = await createUserWithEmailAndPassword(auth, email, password);
+    const user = cred.user;
+    const schoolId = `school_${user.uid.slice(0, 12)}`;
+
+    await setDoc(doc(db, "schools", schoolId), {
+      name: schoolName,
+      logo: "",
+      address: "",
+      phone: "",
+      email: user.email,
+      website: "",
+      motto: "",
+      active: true,
+      createdAt: serverTimestamp(),
+    });
+
+    await setDoc(doc(db, "users", user.uid), {
+      email: user.email,
+      fullName: adminName,
+      role: "schoolAdmin",
+      schoolId,
+      active: true,
+      photoURL: "",
+      createdAt: serverTimestamp(),
+    });
+
+    toast("School created. Welcome to EduNexa.");
+    await enterApp(user);
+  } catch (err) {
+    console.error(err);
+    errBox.textContent = authErrorMessage(err);
+    errBox.classList.add("show");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Create school & sign up";
+  }
 });
 
 // ================= PASSWORD RESET =================
@@ -676,15 +887,12 @@ onAuthStateChanged(auth, async (user) => {
   }
 
   if (!profileSnap.exists()) {
-    if (user.email === INITIAL_ADMIN_EMAIL) {
-      showScreen("screen-bootstrap");
-    } else {
-      // Any other account with no profile doc has no valid role yet —
-      // an Admin needs to create it. Never let them into the app.
-      toast("Your account isn't set up yet. Contact your School Admin.", "bad");
-      await signOut(auth);
-      showScreen("screen-login");
-    }
+    // No profile doc yet. Under normal signup this never happens — the
+    // signup flow writes the profile right after creating the Auth account.
+    // This is the recovery path for the rare case that write was interrupted
+    // (e.g. network drop mid-signup): let them finish linking a school here
+    // rather than being stuck locked out with an orphaned Auth account.
+    showScreen("screen-bootstrap");
     return;
   }
 
@@ -779,52 +987,719 @@ $("menu-toggle").addEventListener("click", () => $("sidebar").classList.toggle("
 
 let currentProfile = null;
 
+const VIEWS_WITH_CUSTOM_TITLE = { profile: "Profile" };
+
 function renderView(viewId, profile) {
   currentProfile = profile;
-  $("page-title").textContent = viewId.charAt(0).toUpperCase() + viewId.slice(1);
+  $("page-title").textContent = VIEWS_WITH_CUSTOM_TITLE[viewId] || viewId.charAt(0).toUpperCase() + viewId.slice(1);
   const content = $("content");
 
-  if (viewId === "dashboard") {
-    content.innerHTML = dashboardHTML(profile.role);
+  const renderers = {
+    dashboard: renderDashboard,
+    classes: renderClasses,
+    subjects: renderSubjects,
+    teachers: renderTeachers,
+    students: renderStudents,
+    profile: renderProfile,
+  };
+
+  if (renderers[viewId]) {
+    renderers[viewId](content, profile);
     return;
   }
 
-  // Phase 1 ships auth + shell only — every other view is an honest
-  // "not built yet" placeholder rather than a fake working screen.
+  // Everything else is an honest "not built yet" placeholder rather than a
+  // fake working screen — no fake local arrays standing in for Firestore.
   content.innerHTML = `
     <div class="panel">
       <div class="state-box">
         <p>${viewId.charAt(0).toUpperCase() + viewId.slice(1)} isn't built yet.</p>
-        <p style="font-size:0.85rem;">This arrives in a later phase, once you've confirmed Phase 1.</p>
+        <p style="font-size:0.85rem;">This arrives in a later phase.</p>
       </div>
     </div>`;
 }
 
-function dashboardHTML(role) {
-  if (role === "superAdmin") {
-    return statGrid(["Total schools", "Active schools", "School admins", "Platform activity"]);
-  }
-  if (role === "schoolAdmin") {
-    return (
-      statGrid(["Students", "Teachers", "Classes", "Subjects", "Outstanding fees"]) +
-      emptyPanel("Recent activity", "No activity yet — it will show up here once your school has data.")
-    );
-  }
-  if (role === "teacher") {
-    return emptyPanel("Your classes", "No classes assigned yet. Your School Admin will assign you classes and subjects.");
-  }
-  // student
-  return emptyPanel("Welcome", "Your class, results, and attendance will appear here once your School Admin sets up your profile.");
-}
-
-function statGrid(labels) {
-  return `<div class="stat-grid">${labels
-    .map((l) => `<div class="stat-card"><div class="num">0</div><div class="label">${l}</div></div>`)
+function statGrid(items) {
+  // items: [{ label, value }]
+  return `<div class="stat-grid">${items
+    .map((it) => `<div class="stat-card"><div class="num">${it.value}</div><div class="label">${it.label}</div></div>`)
     .join("")}</div>`;
 }
 
 function emptyPanel(title, message) {
   return `<div class="panel"><h3>${title}</h3><div class="state-box">${message}</div></div>`;
+}
+
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+// ================= DASHBOARD (live counts) =================
+async function renderDashboard(content, profile) {
+  if (profile.role === "superAdmin") {
+    content.innerHTML = statGrid([
+      { label: "Total schools", value: "…" },
+      { label: "Active schools", value: "…" },
+      { label: "School admins", value: "…" },
+      { label: "Platform activity", value: "0" },
+    ]);
+    try {
+      const schoolsSnap = await getDocs(collection(db, "schools"));
+      const total = schoolsSnap.size;
+      const active = schoolsSnap.docs.filter((d) => d.data().active !== false).length;
+      content.innerHTML = statGrid([
+        { label: "Total schools", value: total },
+        { label: "Active schools", value: active },
+        { label: "School admins", value: total },
+        { label: "Platform activity", value: 0 },
+      ]);
+    } catch (err) {
+      console.error(err);
+    }
+    return;
+  }
+
+  if (profile.role === "schoolAdmin") {
+    content.innerHTML =
+      statGrid([
+        { label: "Students", value: "…" },
+        { label: "Teachers", value: "…" },
+        { label: "Classes", value: "…" },
+        { label: "Subjects", value: "…" },
+      ]) + emptyPanel("Recent activity", "No activity yet — it will show up here as your school builds up data.");
+
+    try {
+      const schoolId = profile.schoolId;
+      const [studentsC, teachersC, classesC, subjectsC] = await Promise.all([
+        getCountFromServer(query(collection(db, "students"), where("schoolId", "==", schoolId))),
+        getCountFromServer(query(collection(db, "teachers"), where("schoolId", "==", schoolId))),
+        getCountFromServer(query(collection(db, "classes"), where("schoolId", "==", schoolId))),
+        getCountFromServer(query(collection(db, "subjects"), where("schoolId", "==", schoolId))),
+      ]);
+      content.querySelector(".stat-grid").innerHTML = [
+        { label: "Students", value: studentsC.data().count },
+        { label: "Teachers", value: teachersC.data().count },
+        { label: "Classes", value: classesC.data().count },
+        { label: "Subjects", value: subjectsC.data().count },
+      ]
+        .map((it) => `<div class="stat-card"><div class="num">${it.value}</div><div class="label">${it.label}</div></div>`)
+        .join("");
+    } catch (err) {
+      console.error(err);
+      toast("Couldn't load dashboard counts.", "bad");
+    }
+    return;
+  }
+
+  if (profile.role === "teacher") {
+    content.innerHTML = emptyPanel("Your classes", "No classes assigned yet. Your School Admin will assign you classes and subjects.");
+    return;
+  }
+
+  // student
+  content.innerHTML = emptyPanel("Welcome", "Your class, results, and attendance will appear here once your School Admin sets up your profile.");
+}
+
+// ================= PROFILE (read-only, self) =================
+function renderProfile(content, profile) {
+  content.innerHTML = `
+    <div class="panel" style="max-width:460px;">
+      <h3>Your profile</h3>
+      <div class="form-grid">
+        <div class="field"><label>Full name</label><div>${esc(profile.fullName)}</div></div>
+        <div class="field"><label>Email</label><div>${esc(profile.email)}</div></div>
+        <div class="field"><label>Role</label><div>${esc(ROLE_LABEL[profile.role] || profile.role)}</div></div>
+        <div class="field"><label>Status</label><div><span class="badge ${profile.active === false ? "inactive" : "active"}">${profile.active === false ? "Inactive" : "Active"}</span></div></div>
+      </div>
+      <p style="font-size:0.8rem;color:var(--slate-light);margin-top:16px;">Editing your profile arrives in a later phase.</p>
+    </div>`;
+}
+
+// ================= CLASSES =================
+async function renderClasses(content, profile) {
+  const schoolId = profile.schoolId;
+  content.innerHTML = `
+    <div class="view-toolbar">
+      <button class="btn brass small" id="cls-add-toggle">+ Add class</button>
+    </div>
+    <div class="panel form-panel" id="cls-form-panel">
+      <h3 id="cls-form-title">Add class</h3>
+      <div id="cls-form-error" class="form-error"></div>
+      <form id="cls-form">
+        <input type="hidden" id="cls-id" />
+        <div class="form-grid">
+          <div class="field">
+            <label for="cls-level">Level</label>
+            <select id="cls-level" required>
+              <option value="">Select level</option>
+              <option>Kindergarten</option>
+              <option>Primary 1</option><option>Primary 2</option><option>Primary 3</option>
+              <option>Primary 4</option><option>Primary 5</option><option>Primary 6</option>
+              <option>JSS 1</option><option>JSS 2</option><option>JSS 3</option>
+              <option>SS 1</option><option>SS 2</option><option>SS 3</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="cls-arm">Arm</label>
+            <input id="cls-arm" type="text" required placeholder="e.g. A" />
+          </div>
+          <div class="field">
+            <label for="cls-session">Academic session</label>
+            <input id="cls-session" type="text" placeholder="e.g. 2025/2026" />
+          </div>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn brass" id="cls-submit">Save class</button>
+          <button type="button" class="btn ghost" id="cls-cancel">Cancel</button>
+        </div>
+      </form>
+    </div>
+    <div class="table-scroll">
+      <table class="data-table">
+        <thead><tr><th>Level</th><th>Arm</th><th>Session</th><th>Status</th><th></th></tr></thead>
+        <tbody id="cls-tbody"><tr><td colspan="5"><div class="skeleton"></div></td></tr></tbody>
+      </table>
+    </div>`;
+
+  const formPanel = $("cls-form-panel");
+  $("cls-add-toggle").addEventListener("click", () => {
+    $("cls-form").reset();
+    $("cls-id").value = "";
+    $("cls-form-title").textContent = "Add class";
+    formPanel.classList.add("open");
+  });
+  $("cls-cancel").addEventListener("click", () => formPanel.classList.remove("open"));
+
+  $("cls-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const errBox = $("cls-form-error");
+    errBox.classList.remove("show");
+    const id = $("cls-id").value;
+    const level = $("cls-level").value;
+    const arm = $("cls-arm").value.trim();
+    const session = $("cls-session").value.trim();
+    const btn = $("cls-submit");
+    btn.disabled = true;
+    try {
+      if (id) {
+        await updateDoc(doc(db, "classes", id), { level, arm, session });
+        toast("Class updated.");
+      } else {
+        await setDoc(doc(collection(db, "classes")), {
+          schoolId, level, arm, session,
+          classTeacherId: "", active: true, createdAt: serverTimestamp(),
+        });
+        toast("Class added.");
+      }
+      formPanel.classList.remove("open");
+      loadClassesTable();
+    } catch (err) {
+      console.error(err);
+      errBox.textContent = "Couldn't save. " + (err.message || "");
+      errBox.classList.add("show");
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  async function loadClassesTable() {
+    const tbody = $("cls-tbody");
+    tbody.innerHTML = `<tr><td colspan="5"><div class="skeleton"></div></td></tr>`;
+    try {
+      const snap = await getDocs(query(collection(db, "classes"), where("schoolId", "==", schoolId)));
+      if (snap.empty) {
+        tbody.innerHTML = `<tr><td colspan="5" class="state-box">No classes yet. Add your first class above.</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = snap.docs
+        .map((d) => {
+          const c = d.data();
+          return `<tr>
+            <td>${esc(c.level)}</td><td>${esc(c.arm)}</td><td>${esc(c.session || "—")}</td>
+            <td><span class="badge ${c.active === false ? "inactive" : "active"}">${c.active === false ? "Inactive" : "Active"}</span></td>
+            <td class="row-actions">
+              <button data-edit="${d.id}">Edit</button>
+              <button class="danger" data-toggle="${d.id}" data-active="${c.active !== false}">${c.active === false ? "Reactivate" : "Deactivate"}</button>
+            </td>
+          </tr>`;
+        })
+        .join("");
+
+      tbody.querySelectorAll("[data-edit]").forEach((btn) =>
+        btn.addEventListener("click", async () => {
+          const dref = doc(db, "classes", btn.dataset.edit);
+          const s = await getDoc(dref);
+          const c = s.data();
+          $("cls-id").value = s.id;
+          $("cls-level").value = c.level;
+          $("cls-arm").value = c.arm;
+          $("cls-session").value = c.session || "";
+          $("cls-form-title").textContent = "Edit class";
+          formPanel.classList.add("open");
+        })
+      );
+      tbody.querySelectorAll("[data-toggle]").forEach((btn) =>
+        btn.addEventListener("click", async () => {
+          const nowActive = btn.dataset.active === "true";
+          const ok = await confirmDialog(
+            nowActive ? "Deactivate class?" : "Reactivate class?",
+            nowActive ? "It will be hidden from active use but not deleted." : "It will become active again."
+          );
+          if (!ok) return;
+          await updateDoc(doc(db, "classes", btn.dataset.toggle), { active: !nowActive });
+          toast(nowActive ? "Class deactivated." : "Class reactivated.");
+          loadClassesTable();
+        })
+      );
+    } catch (err) {
+      console.error(err);
+      tbody.innerHTML = `<tr><td colspan="5" class="state-box">Couldn't load classes.</td></tr>`;
+    }
+  }
+  loadClassesTable();
+}
+
+// ================= SUBJECTS =================
+const LEVELS = ["Kindergarten","Primary 1","Primary 2","Primary 3","Primary 4","Primary 5","Primary 6","JSS 1","JSS 2","JSS 3","SS 1","SS 2","SS 3"];
+
+async function renderSubjects(content, profile) {
+  const schoolId = profile.schoolId;
+  content.innerHTML = `
+    <div class="view-toolbar">
+      <button class="btn brass small" id="sub-add-toggle">+ Add subject</button>
+    </div>
+    <div class="panel form-panel" id="sub-form-panel">
+      <h3 id="sub-form-title">Add subject</h3>
+      <div id="sub-form-error" class="form-error"></div>
+      <form id="sub-form">
+        <input type="hidden" id="sub-id" />
+        <div class="form-grid">
+          <div class="field"><label for="sub-code">Subject code</label><input id="sub-code" type="text" required placeholder="e.g. MTH" /></div>
+          <div class="field"><label for="sub-name">Subject name</label><input id="sub-name" type="text" required placeholder="e.g. Mathematics" /></div>
+        </div>
+        <div class="field" style="margin-top:14px;">
+          <label>Applicable levels</label>
+          <div class="checkbox-row" id="sub-levels">
+            ${LEVELS.map((l) => `<label><input type="checkbox" value="${l}" /> ${l}</label>`).join("")}
+          </div>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn brass" id="sub-submit">Save subject</button>
+          <button type="button" class="btn ghost" id="sub-cancel">Cancel</button>
+        </div>
+      </form>
+    </div>
+    <div class="table-scroll">
+      <table class="data-table">
+        <thead><tr><th>Code</th><th>Name</th><th>Levels</th><th>Status</th><th></th></tr></thead>
+        <tbody id="sub-tbody"><tr><td colspan="5"><div class="skeleton"></div></td></tr></tbody>
+      </table>
+    </div>`;
+
+  const formPanel = $("sub-form-panel");
+  $("sub-add-toggle").addEventListener("click", () => {
+    $("sub-form").reset();
+    $("sub-id").value = "";
+    $("sub-form-title").textContent = "Add subject";
+    formPanel.classList.add("open");
+  });
+  $("sub-cancel").addEventListener("click", () => formPanel.classList.remove("open"));
+
+  $("sub-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const errBox = $("sub-form-error");
+    errBox.classList.remove("show");
+    const id = $("sub-id").value;
+    const code = $("sub-code").value.trim();
+    const name = $("sub-name").value.trim();
+    const levels = Array.from(document.querySelectorAll("#sub-levels input:checked")).map((i) => i.value);
+    const btn = $("sub-submit");
+    btn.disabled = true;
+    try {
+      if (id) {
+        await updateDoc(doc(db, "subjects", id), { code, name, levels });
+        toast("Subject updated.");
+      } else {
+        await setDoc(doc(collection(db, "subjects")), {
+          schoolId, code, name, levels, active: true, createdAt: serverTimestamp(),
+        });
+        toast("Subject added.");
+      }
+      formPanel.classList.remove("open");
+      loadSubjectsTable();
+    } catch (err) {
+      console.error(err);
+      errBox.textContent = "Couldn't save. " + (err.message || "");
+      errBox.classList.add("show");
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  async function loadSubjectsTable() {
+    const tbody = $("sub-tbody");
+    tbody.innerHTML = `<tr><td colspan="5"><div class="skeleton"></div></td></tr>`;
+    try {
+      const snap = await getDocs(query(collection(db, "subjects"), where("schoolId", "==", schoolId)));
+      if (snap.empty) {
+        tbody.innerHTML = `<tr><td colspan="5" class="state-box">No subjects yet. Add your first subject above.</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = snap.docs
+        .map((d) => {
+          const s = d.data();
+          return `<tr>
+            <td>${esc(s.code)}</td><td>${esc(s.name)}</td><td>${esc((s.levels || []).join(", ") || "—")}</td>
+            <td><span class="badge ${s.active === false ? "inactive" : "active"}">${s.active === false ? "Inactive" : "Active"}</span></td>
+            <td class="row-actions">
+              <button data-edit="${d.id}">Edit</button>
+              <button class="danger" data-toggle="${d.id}" data-active="${s.active !== false}">${s.active === false ? "Reactivate" : "Deactivate"}</button>
+            </td>
+          </tr>`;
+        })
+        .join("");
+
+      tbody.querySelectorAll("[data-edit]").forEach((btn) =>
+        btn.addEventListener("click", async () => {
+          const s = await getDoc(doc(db, "subjects", btn.dataset.edit));
+          const sub = s.data();
+          $("sub-id").value = s.id;
+          $("sub-code").value = sub.code;
+          $("sub-name").value = sub.name;
+          document.querySelectorAll("#sub-levels input").forEach((i) => (i.checked = (sub.levels || []).includes(i.value)));
+          $("sub-form-title").textContent = "Edit subject";
+          formPanel.classList.add("open");
+        })
+      );
+      tbody.querySelectorAll("[data-toggle]").forEach((btn) =>
+        btn.addEventListener("click", async () => {
+          const nowActive = btn.dataset.active === "true";
+          const ok = await confirmDialog(
+            nowActive ? "Deactivate subject?" : "Reactivate subject?",
+            nowActive ? "It will be hidden from active use but not deleted." : "It will become active again."
+          );
+          if (!ok) return;
+          await updateDoc(doc(db, "subjects", btn.dataset.toggle), { active: !nowActive });
+          toast(nowActive ? "Subject deactivated." : "Subject reactivated.");
+          loadSubjectsTable();
+        })
+      );
+    } catch (err) {
+      console.error(err);
+      tbody.innerHTML = `<tr><td colspan="5" class="state-box">Couldn't load subjects.</td></tr>`;
+    }
+  }
+  loadSubjectsTable();
+}
+
+// ================= TEACHERS =================
+async function renderTeachers(content, profile) {
+  const schoolId = profile.schoolId;
+  content.innerHTML = `
+    <div class="view-toolbar">
+      <input class="search-input" id="tch-search" placeholder="Search by name…" />
+      <button class="btn brass small" id="tch-add-toggle">+ Add teacher</button>
+    </div>
+    <div class="panel form-panel" id="tch-form-panel">
+      <h3>Add teacher</h3>
+      <p style="font-size:0.85rem;color:var(--slate);">This creates a sign-in account for the teacher with a temporary password, which you'll share with them.</p>
+      <div id="tch-form-error" class="form-error"></div>
+      <form id="tch-form">
+        <div class="form-grid">
+          <div class="field"><label for="tch-name">Full name</label><input id="tch-name" type="text" required /></div>
+          <div class="field"><label for="tch-email">Email</label><input id="tch-email" type="email" required /></div>
+          <div class="field"><label for="tch-phone">Phone</label><input id="tch-phone" type="text" /></div>
+          <div class="field"><label for="tch-gender">Gender</label>
+            <select id="tch-gender"><option value="">Select</option><option>Male</option><option>Female</option></select>
+          </div>
+          <div class="field"><label for="tch-qualification">Qualification</label><input id="tch-qualification" type="text" /></div>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn brass" id="tch-submit">Create teacher account</button>
+          <button type="button" class="btn ghost" id="tch-cancel">Cancel</button>
+        </div>
+      </form>
+    </div>
+    <div id="tch-temp-pass"></div>
+    <div class="table-scroll">
+      <table class="data-table">
+        <thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Status</th><th></th></tr></thead>
+        <tbody id="tch-tbody"><tr><td colspan="5"><div class="skeleton"></div></td></tr></tbody>
+      </table>
+    </div>`;
+
+  const formPanel = $("tch-form-panel");
+  $("tch-add-toggle").addEventListener("click", () => {
+    $("tch-form").reset();
+    formPanel.classList.add("open");
+  });
+  $("tch-cancel").addEventListener("click", () => formPanel.classList.remove("open"));
+
+  let allTeachers = [];
+
+  $("tch-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const errBox = $("tch-form-error");
+    errBox.classList.remove("show");
+    const fullName = $("tch-name").value.trim();
+    const email = $("tch-email").value.trim();
+    const phone = $("tch-phone").value.trim();
+    const gender = $("tch-gender").value;
+    const qualification = $("tch-qualification").value.trim();
+    const btn = $("tch-submit");
+    btn.disabled = true;
+    btn.textContent = "Creating…";
+    try {
+      const tempPassword = generateTempPassword();
+      const uid = await createManagedAuthUser(email, tempPassword);
+
+      await setDoc(doc(db, "users", uid), {
+        email, fullName, role: "teacher", schoolId, active: true, photoURL: "", createdAt: serverTimestamp(),
+      });
+      await setDoc(doc(db, "teachers", uid), {
+        schoolId, fullName, email, phone, gender, qualification,
+        assignedSubjects: [], assignedClasses: [], active: true, createdAt: serverTimestamp(),
+      });
+
+      $("tch-temp-pass").innerHTML = `<div class="temp-pass-box">
+        Account created for <strong>${esc(fullName)}</strong>. Share these sign-in details with them —
+        they should log in and can change the password from "Forgot password?" any time.<br/>
+        Email: <code>${esc(email)}</code> &nbsp; Temporary password: <code>${esc(tempPassword)}</code>
+      </div>`;
+
+      formPanel.classList.remove("open");
+      $("tch-form").reset();
+      toast("Teacher account created.");
+      loadTeachersTable();
+    } catch (err) {
+      console.error(err);
+      errBox.textContent = authErrorMessage(err.code ? err : { code: null }) === "Something went wrong. (no error code)"
+        ? "Couldn't create account. " + (err.message || "")
+        : authErrorMessage(err);
+      errBox.classList.add("show");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Create teacher account";
+    }
+  });
+
+  function renderTeacherRows(list) {
+    const tbody = $("tch-tbody");
+    if (!list.length) {
+      tbody.innerHTML = `<tr><td colspan="5" class="state-box">No teachers found.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = list
+      .map(
+        (t) => `<tr>
+          <td>${esc(t.fullName)}</td><td>${esc(t.email)}</td><td>${esc(t.phone || "—")}</td>
+          <td><span class="badge ${t.active === false ? "inactive" : "active"}">${t.active === false ? "Inactive" : "Active"}</span></td>
+          <td class="row-actions">
+            <button class="danger" data-toggle="${t.id}" data-active="${t.active !== false}">${t.active === false ? "Reactivate" : "Deactivate"}</button>
+          </td>
+        </tr>`
+      )
+      .join("");
+    tbody.querySelectorAll("[data-toggle]").forEach((btn) =>
+      btn.addEventListener("click", async () => {
+        const nowActive = btn.dataset.active === "true";
+        const ok = await confirmDialog(
+          nowActive ? "Deactivate teacher?" : "Reactivate teacher?",
+          nowActive ? "They will no longer be able to log in." : "They will be able to log in again."
+        );
+        if (!ok) return;
+        await updateDoc(doc(db, "teachers", btn.dataset.toggle), { active: !nowActive });
+        await updateDoc(doc(db, "users", btn.dataset.toggle), { active: !nowActive });
+        toast(nowActive ? "Teacher deactivated." : "Teacher reactivated.");
+        loadTeachersTable();
+      })
+    );
+  }
+
+  $("tch-search").addEventListener("input", (e) => {
+    const q = e.target.value.trim().toLowerCase();
+    renderTeacherRows(allTeachers.filter((t) => (t.fullName || "").toLowerCase().includes(q)));
+  });
+
+  async function loadTeachersTable() {
+    const tbody = $("tch-tbody");
+    tbody.innerHTML = `<tr><td colspan="5"><div class="skeleton"></div></td></tr>`;
+    try {
+      const snap = await getDocs(query(collection(db, "teachers"), where("schoolId", "==", schoolId)));
+      allTeachers = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      renderTeacherRows(allTeachers);
+    } catch (err) {
+      console.error(err);
+      tbody.innerHTML = `<tr><td colspan="5" class="state-box">Couldn't load teachers.</td></tr>`;
+    }
+  }
+  loadTeachersTable();
+}
+
+// ================= STUDENTS =================
+async function renderStudents(content, profile) {
+  const schoolId = profile.schoolId;
+
+  let classOptions = [];
+  try {
+    const snap = await getDocs(query(collection(db, "classes"), where("schoolId", "==", schoolId)));
+    classOptions = snap.docs.map((d) => ({ id: d.id, label: `${d.data().level} ${d.data().arm}` }));
+  } catch (err) {
+    console.error(err);
+  }
+
+  content.innerHTML = `
+    <div class="view-toolbar">
+      <input class="search-input" id="stu-search" placeholder="Search by name or admission number…" />
+      <button class="btn brass small" id="stu-add-toggle">+ Add student</button>
+    </div>
+    <div class="panel form-panel" id="stu-form-panel">
+      <h3>Add student</h3>
+      <p style="font-size:0.85rem;color:var(--slate);">This creates a sign-in account for the student with a temporary password, which you'll share with them or their guardian.</p>
+      <div id="stu-form-error" class="form-error"></div>
+      <form id="stu-form">
+        <div class="form-grid">
+          <div class="field"><label for="stu-admission">Admission number</label><input id="stu-admission" type="text" required /></div>
+          <div class="field"><label for="stu-name">Full name</label><input id="stu-name" type="text" required /></div>
+          <div class="field"><label for="stu-email">Email</label><input id="stu-email" type="email" required /></div>
+          <div class="field"><label for="stu-gender">Gender</label>
+            <select id="stu-gender"><option value="">Select</option><option>Male</option><option>Female</option></select>
+          </div>
+          <div class="field"><label for="stu-dob">Date of birth</label><input id="stu-dob" type="date" /></div>
+          <div class="field"><label for="stu-class">Class</label>
+            <select id="stu-class"><option value="">Unassigned</option>${classOptions.map((c) => `<option value="${c.id}">${esc(c.label)}</option>`).join("")}</select>
+          </div>
+          <div class="field"><label for="stu-guardian">Guardian name</label><input id="stu-guardian" type="text" /></div>
+          <div class="field"><label for="stu-guardian-phone">Guardian phone</label><input id="stu-guardian-phone" type="text" /></div>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn brass" id="stu-submit">Create student account</button>
+          <button type="button" class="btn ghost" id="stu-cancel">Cancel</button>
+        </div>
+      </form>
+    </div>
+    <div id="stu-temp-pass"></div>
+    <div class="table-scroll">
+      <table class="data-table">
+        <thead><tr><th>Admission #</th><th>Name</th><th>Class</th><th>Status</th><th></th></tr></thead>
+        <tbody id="stu-tbody"><tr><td colspan="5"><div class="skeleton"></div></td></tr></tbody>
+      </table>
+    </div>`;
+
+  const formPanel = $("stu-form-panel");
+  $("stu-add-toggle").addEventListener("click", () => {
+    $("stu-form").reset();
+    formPanel.classList.add("open");
+  });
+  $("stu-cancel").addEventListener("click", () => formPanel.classList.remove("open"));
+
+  let allStudents = [];
+  const classLabelById = Object.fromEntries(classOptions.map((c) => [c.id, c.label]));
+
+  $("stu-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const errBox = $("stu-form-error");
+    errBox.classList.remove("show");
+    const admissionNumber = $("stu-admission").value.trim();
+    const fullName = $("stu-name").value.trim();
+    const email = $("stu-email").value.trim();
+    const gender = $("stu-gender").value;
+    const dob = $("stu-dob").value;
+    const classId = $("stu-class").value;
+    const guardianName = $("stu-guardian").value.trim();
+    const guardianPhone = $("stu-guardian-phone").value.trim();
+    const btn = $("stu-submit");
+    btn.disabled = true;
+    btn.textContent = "Creating…";
+    try {
+      const tempPassword = generateTempPassword();
+      const uid = await createManagedAuthUser(email, tempPassword);
+
+      await setDoc(doc(db, "users", uid), {
+        email, fullName, role: "student", schoolId, active: true, photoURL: "", createdAt: serverTimestamp(),
+      });
+      await setDoc(doc(db, "students", uid), {
+        schoolId, admissionNumber, fullName, email, gender, dob, classId,
+        guardianName, guardianPhone, academicStatus: "active", active: true, createdAt: serverTimestamp(),
+      });
+
+      $("stu-temp-pass").innerHTML = `<div class="temp-pass-box">
+        Account created for <strong>${esc(fullName)}</strong>. Share these sign-in details with them or their guardian —
+        they should log in and can change the password from "Forgot password?" any time.<br/>
+        Email: <code>${esc(email)}</code> &nbsp; Temporary password: <code>${esc(tempPassword)}</code>
+      </div>`;
+
+      formPanel.classList.remove("open");
+      $("stu-form").reset();
+      toast("Student account created.");
+      loadStudentsTable();
+    } catch (err) {
+      console.error(err);
+      errBox.textContent = authErrorMessage(err.code ? err : { code: null }) === "Something went wrong. (no error code)"
+        ? "Couldn't create account. " + (err.message || "")
+        : authErrorMessage(err);
+      errBox.classList.add("show");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Create student account";
+    }
+  });
+
+  function renderStudentRows(list) {
+    const tbody = $("stu-tbody");
+    if (!list.length) {
+      tbody.innerHTML = `<tr><td colspan="5" class="state-box">No students found.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = list
+      .map(
+        (s) => `<tr>
+          <td>${esc(s.admissionNumber)}</td><td>${esc(s.fullName)}</td><td>${esc(classLabelById[s.classId] || "Unassigned")}</td>
+          <td><span class="badge ${s.active === false ? "inactive" : "active"}">${s.active === false ? "Inactive" : "Active"}</span></td>
+          <td class="row-actions">
+            <button class="danger" data-toggle="${s.id}" data-active="${s.active !== false}">${s.active === false ? "Reactivate" : "Deactivate"}</button>
+          </td>
+        </tr>`
+      )
+      .join("");
+    tbody.querySelectorAll("[data-toggle]").forEach((btn) =>
+      btn.addEventListener("click", async () => {
+        const nowActive = btn.dataset.active === "true";
+        const ok = await confirmDialog(
+          nowActive ? "Deactivate student?" : "Reactivate student?",
+          nowActive ? "They will no longer be able to log in." : "They will be able to log in again."
+        );
+        if (!ok) return;
+        await updateDoc(doc(db, "students", btn.dataset.toggle), { active: !nowActive });
+        await updateDoc(doc(db, "users", btn.dataset.toggle), { active: !nowActive });
+        toast(nowActive ? "Student deactivated." : "Student reactivated.");
+        loadStudentsTable();
+      })
+    );
+  }
+
+  $("stu-search").addEventListener("input", (e) => {
+    const q = e.target.value.trim().toLowerCase();
+    renderStudentRows(
+      allStudents.filter(
+        (s) => (s.fullName || "").toLowerCase().includes(q) || (s.admissionNumber || "").toLowerCase().includes(q)
+      )
+    );
+  });
+
+  async function loadStudentsTable() {
+    const tbody = $("stu-tbody");
+    tbody.innerHTML = `<tr><td colspan="5"><div class="skeleton"></div></td></tr>`;
+    try {
+      const snap = await getDocs(query(collection(db, "students"), where("schoolId", "==", schoolId)));
+      allStudents = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      renderStudentRows(allStudents);
+    } catch (err) {
+      console.error(err);
+      tbody.innerHTML = `<tr><td colspan="5" class="state-box">Couldn't load students.</td></tr>`;
+    }
+  }
+  loadStudentsTable();
 }
 </script>
 </body>
