@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>EduNexa — Smart School Management, Simplified.</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+/* EduNexa — styles.css
+   Palette: deep ink blue + slate + a single warm brass accent for actions.
+   Chosen for a school-records product: calm, legible, not a generic SaaS card kit. */
+
+:root {
+  --ink: #14213d;
+  --ink-2: #1f2f52;
+  --slate: #4a5568;
+  --slate-light: #7a8699;
+  --paper: #f7f6f2;
+  --paper-2: #ffffff;
+  --line: #dfe1e6;
+  --brass: #b9852f;
+  --brass-dark: #96691f;
+  --good: #2f7a4f;
+  --bad: #a13a3a;
+  --warn: #a1743a;
+
+  --font-body: "Source Sans 3", "Segoe UI", Arial, sans-serif;
+  --font-display: "Fraunces", Georgia, serif;
+
+  --radius-s: 4px;
+  --radius-m: 8px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ink: #eef1f6;
+    --ink-2: #cfd6e4;
+    --slate: #b7c0cf;
+    --slate-light: #8c96a8;
+    --paper: #10151f;
+    --paper-2: #161d2b;
+    --line: #2a3242;
+  }
+}
+:root[data-theme="dark"] {
+  --ink: #eef1f6;
+  --ink-2: #cfd6e4;
+  --slate: #b7c0cf;
+  --slate-light: #8c96a8;
+  --paper: #10151f;
+  --paper-2: #161d2b;
+  --line: #2a3242;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  background: var(--paper);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3, .brand-word { font-family: var(--font-display); font-weight: 600; }
+a { color: var(--brass-dark); }
+button { font-family: inherit; }
+:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+
+/* ---------- Auth screens ---------- */
+.auth-wrap {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+.auth-card {
+  width: 100%;
+  max-width: 380px;
+  background: var(--paper-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  padding: 32px 28px;
+}
+.auth-brand {
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  margin: 0 0 2px;
+}
+.auth-tagline {
+  color: var(--slate-light);
+  font-size: 0.9rem;
+  margin: 0 0 24px;
+}
+.field { margin-bottom: 16px; }
+.field label {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--slate);
+  margin-bottom: 6px;
+}
+.field input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-s);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 0.95rem;
+}
+.field input:focus { border-color: var(--brass); }
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 11px 16px;
+  border: none;
+  border-radius: var(--radius-s);
+  background: var(--ink);
+  color: #fff;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+.btn:hover { background: var(--ink-2); }
+.btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.btn.brass { background: var(--brass); }
+.btn.brass:hover { background: var(--brass-dark); }
+.btn.ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+.btn.small { width: auto; padding: 7px 12px; font-size: 0.85rem; }
+
+.link-row {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 14px;
+  font-size: 0.85rem;
+}
+.form-error {
+  background: #fbeaea;
+  color: var(--bad);
+  border: 1px solid #f0c9c9;
+  padding: 8px 12px;
+  border-radius: var(--radius-s);
+  font-size: 0.85rem;
+  margin-bottom: 14px;
+  display: none;
+}
+:root[data-theme="dark"] .form-error, @media (prefers-color-scheme: dark) {
+  .form-error { background: #2a1616; border-color: #4a2222; }
+}
+.form-error.show { display: block; }
+
+/* ---------- App shell ---------- */
+.app-shell { display: none; min-height: 100vh; grid-template-columns: 220px 1fr; }
+.app-shell.active { display: grid; }
+
+.sidebar {
+  background: var(--ink);
+  color: #e7e9ef;
+  padding: 20px 14px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+}
+.sidebar .brand { font-family: var(--font-display); font-size: 1.15rem; color: #fff; padding: 0 8px 18px; }
+.sidebar nav a {
+  display: block;
+  padding: 9px 10px;
+  color: #c3c8d6;
+  text-decoration: none;
+  border-radius: var(--radius-s);
+  font-size: 0.9rem;
+  margin-bottom: 2px;
+}
+.sidebar nav a:hover { background: rgba(255,255,255,0.06); color: #fff; }
+.sidebar nav a.active { background: var(--brass); color: #1a1200; }
+
+.main-col { display: flex; flex-direction: column; min-width: 0; }
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 22px;
+  border-bottom: 1px solid var(--line);
+  background: var(--paper-2);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+.topbar .who { font-size: 0.85rem; color: var(--slate); }
+.content { padding: 22px; flex: 1; }
+
+/* ---------- Cards / stats ---------- */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 14px;
+  margin-bottom: 22px;
+}
+.stat-card {
+  background: var(--paper-2);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--brass);
+  border-radius: var(--radius-s);
+  padding: 14px 16px;
+}
+.stat-card .num { font-family: var(--font-display); font-size: 1.7rem; }
+.stat-card .label { color: var(--slate-light); font-size: 0.82rem; }
+
+.panel {
+  background: var(--paper-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  padding: 18px 20px;
+  margin-bottom: 18px;
+}
+.panel h3 { margin: 0 0 12px; font-size: 1.05rem; }
+
+/* ---------- States ---------- */
+.state-box {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--slate-light);
+}
+.skeleton {
+  background: linear-gradient(90deg, var(--line) 25%, #ececec 37%, var(--line) 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease infinite;
+  border-radius: var(--radius-s);
+  height: 14px;
+  margin-bottom: 8px;
+}
+@keyframes shimmer { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }
+
+/* ---------- Toasts ---------- */
+#toast-region {
+  position: fixed;
+  bottom: 18px;
+  right: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 100;
+}
+.toast {
+  background: var(--ink);
+  color: #fff;
+  padding: 11px 16px;
+  border-radius: var(--radius-s);
+  font-size: 0.88rem;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.18);
+  max-width: 320px;
+}
+.toast.good { border-left: 3px solid var(--good); }
+.toast.bad { border-left: 3px solid var(--bad); }
+
+/* ---------- Modal / confirm dialog ---------- */
+.modal-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(10,14,24,0.5);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  padding: 16px;
+}
+.modal-backdrop.show { display: flex; }
+.modal-box {
+  background: var(--paper-2);
+  border-radius: var(--radius-m);
+  padding: 22px;
+  width: 100%;
+  max-width: 380px;
+}
+.modal-box h3 { margin-top: 0; }
+.modal-actions { display: flex; gap: 10px; margin-top: 18px; }
+
+/* ---------- Bootstrap screen ---------- */
+.bootstrap-card { max-width: 440px; }
+.bootstrap-card p { color: var(--slate); font-size: 0.9rem; line-height: 1.5; }
+
+/* ---------- Responsive ---------- */
+@media (max-width: 760px) {
+  .app-shell.active { grid-template-columns: 1fr; }
+  .sidebar {
+    position: fixed;
+    left: 0; top: 0; bottom: 0;
+    width: 220px;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+    z-index: 40;
+  }
+  .sidebar.open { transform: translateX(0); }
+  .topbar .menu-btn { display: inline-flex; }
+}
+.topbar .menu-btn { display: none; background: none; border: none; font-size: 1.3rem; cursor: pointer; color: var(--ink); }
+
+</style>
+</head>
+<body>
+
+<!-- ===== LOADING SPLASH (shown while we check auth state) ===== -->
+<div id="splash" class="auth-wrap">
+  <div>
+    <div class="skeleton" style="width:140px;height:22px;"></div>
+    <div class="skeleton" style="width:90px;"></div>
+  </div>
+</div>
+
+<!-- ===== LOGIN SCREEN ===== -->
+<div id="screen-login" class="auth-wrap" style="display:none;">
+  <div class="auth-card">
+    <p class="auth-brand">EduNexa</p>
+    <p class="auth-tagline">Smart School Management, Simplified.</p>
+
+    <div id="login-error" class="form-error"></div>
+
+    <form id="login-form">
+      <div class="field">
+        <label for="login-email">Email</label>
+        <input id="login-email" type="email" autocomplete="username" required />
+      </div>
+      <div class="field">
+        <label for="login-password">Password</label>
+        <input id="login-password" type="password" autocomplete="current-password" required />
+      </div>
+      <button type="submit" class="btn brass" id="login-submit">Log in</button>
+    </form>
+
+    <div class="link-row">
+      <a href="#" id="show-reset">Forgot password?</a>
+      <span></span>
+    </div>
+  </div>
+</div>
+
+<!-- ===== RESET PASSWORD SCREEN ===== -->
+<div id="screen-reset" class="auth-wrap" style="display:none;">
+  <div class="auth-card">
+    <p class="auth-brand">Reset password</p>
+    <p class="auth-tagline">We'll email you a reset link.</p>
+
+    <div id="reset-error" class="form-error"></div>
+    <div id="reset-success" class="form-error" style="background:#e9f5ee;color:#2f7a4f;border-color:#cfe9da;"></div>
+
+    <form id="reset-form">
+      <div class="field">
+        <label for="reset-email">Email</label>
+        <input id="reset-email" type="email" required />
+      </div>
+      <button type="submit" class="btn brass" id="reset-submit">Send reset link</button>
+    </form>
+    <div class="link-row">
+      <a href="#" id="show-login">Back to login</a>
+      <span></span>
+    </div>
+  </div>
+</div>
+
+<!-- ===== FIRST-RUN BOOTSTRAP SCREEN (initial admin only) ===== -->
+<div id="screen-bootstrap" class="auth-wrap" style="display:none;">
+  <div class="auth-card bootstrap-card">
+    <p class="auth-brand">Initialize your school</p>
+    <p>You're signed in as the platform's initial admin account, but no school has been set up yet. Enter your school's details once — this creates the school record and links your account as its School Admin. This screen only ever appears for this one account, one time.</p>
+
+    <div id="bootstrap-error" class="form-error"></div>
+
+    <form id="bootstrap-form">
+      <div class="field">
+        <label for="bs-school-name">School name</label>
+        <input id="bs-school-name" type="text" required placeholder="e.g. Bright Path Academy" />
+      </div>
+      <div class="field">
+        <label for="bs-admin-name">Your full name</label>
+        <input id="bs-admin-name" type="text" required placeholder="e.g. Wisdom Ebube Daniel" />
+      </div>
+      <button type="submit" class="btn brass" id="bootstrap-submit">Create school &amp; continue</button>
+    </form>
+  </div>
+</div>
+
+<!-- ===== APP SHELL ===== -->
+<div id="app-shell" class="app-shell">
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">EduNexa</div>
+    <nav id="sidebar-nav">
+      <!-- populated per-role by app.js -->
+    </nav>
+  </aside>
+
+  <div class="main-col">
+    <div class="topbar">
+      <button class="menu-btn" id="menu-toggle" aria-label="Toggle menu">&#9776;</button>
+      <div id="page-title" style="font-weight:600;">Dashboard</div>
+      <div style="display:flex;align-items:center;gap:14px;">
+        <span class="who" id="who-label"></span>
+        <button class="btn ghost small" id="logout-btn">Log out</button>
+      </div>
+    </div>
+    <div class="content" id="content">
+      <!-- routed view renders here -->
+    </div>
+  </div>
+</div>
+
+<!-- ===== Toasts ===== -->
+<div id="toast-region" aria-live="polite"></div>
+
+<!-- ===== Confirm dialog ===== -->
+<div class="modal-backdrop" id="confirm-backdrop">
+  <div class="modal-box">
+    <h3 id="confirm-title">Are you sure?</h3>
+    <p id="confirm-body" style="color:var(--slate);font-size:0.9rem;"></p>
+    <div class="modal-actions">
+      <button class="btn ghost" id="confirm-cancel">Cancel</button>
+      <button class="btn brass" id="confirm-ok">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+// firebase.js
+// EduNexa — Firebase initialization
+// Uses Firebase v10 modular SDK via CDN (see index.html <script type="module"> imports).
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+import {
+  getAuth,
+  setPersistence,
+  browserLocalPersistence,
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+import { getFirestore } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+
+// Supplied by the project owner. This is client-side config, not a secret —
+// safe to ship in frontend code. Access control lives entirely in Firestore
+// Security Rules, never in this config.
+// Note: Firebase Storage is not used in this build — photos/receipts will be
+// handled another way (e.g. external image URLs, or added back later if needed).
+const firebaseConfig = {
+  apiKey: "AIzaSyCn6urJZ6tKBJTgBv9mjywQTKeoaZIhFYw",
+  authDomain: "edunexa-70b24.firebaseapp.com",
+  projectId: "edunexa-70b24",
+  storageBucket: "edunexa-70b24.firebasestorage.app",
+  messagingSenderId: "845157830674",
+  appId: "1:845157830674:web:b8a83619da9249a38fc8cb",
+  measurementId: "G-FYMKF3C4T8",
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+// Keep users signed in across page reloads/tabs.
+setPersistence(auth, browserLocalPersistence);
+
+// The one email allowed to run the first-run bootstrap (create the first
+// school + link itself as School Admin). Mirrored in Firestore Security Rules —
+// changing it here does NOT relax security, the rules are the real gate.
+const INITIAL_ADMIN_EMAIL = "wisdomebubedaniel2009@gmail.com";
+
+// ==================== app.js ====================
+
+// app.js — EduNexa Phase 1
+// Auth, role-based routing, first-run bootstrap, and dashboard shells.
+// Student/teacher/class/subject/result/fee features arrive in later phases.
+
+import {
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signOut,
+  sendPasswordResetEmail,
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+import {
+  doc,
+  getDoc,
+  setDoc,
+  serverTimestamp,
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+
+// ---------- tiny DOM helpers ----------
+const $ = (id) => document.getElementById(id);
+const show = (el) => (el.style.display = "");
+const hide = (el) => (el.style.display = "none");
+
+function showScreen(name) {
+  ["splash", "screen-login", "screen-reset", "screen-bootstrap"].forEach((id) => hide($(id)));
+  $("app-shell").classList.remove("active");
+  if (name === "app") {
+    $("app-shell").classList.add("active");
+  } else {
+    show($(name));
+  }
+}
+
+// ---------- toasts ----------
+function toast(message, kind = "good") {
+  const region = $("toast-region");
+  const el = document.createElement("div");
+  el.className = `toast ${kind}`;
+  el.textContent = message;
+  region.appendChild(el);
+  setTimeout(() => el.remove(), 4000);
+}
+
+// ---------- confirm dialog ----------
+function confirmDialog(title, body) {
+  return new Promise((resolve) => {
+    $("confirm-title").textContent = title;
+    $("confirm-body").textContent = body;
+    const backdrop = $("confirm-backdrop");
+    backdrop.classList.add("show");
+    const cleanup = (result) => {
+      backdrop.classList.remove("show");
+      $("confirm-ok").removeEventListener("click", onOk);
+      $("confirm-cancel").removeEventListener("click", onCancel);
+      resolve(result);
+    };
+    const onOk = () => cleanup(true);
+    const onCancel = () => cleanup(false);
+    $("confirm-ok").addEventListener("click", onOk);
+    $("confirm-cancel").addEventListener("click", onCancel);
+  });
+}
+
+// ---------- friendly auth error messages ----------
+function authErrorMessage(err) {
+  const code = err && err.code;
+  const map = {
+    "auth/invalid-email": "That email address looks invalid.",
+    "auth/user-not-found": "No account found with that email.",
+    "auth/wrong-password": "Incorrect password.",
+    "auth/invalid-credential": "Incorrect email or password.",
+    "auth/too-many-requests": "Too many attempts. Please wait a moment and try again.",
+    "auth/network-request-failed": "Network error — check your connection.",
+  };
+  return map[code] || "Something went wrong. Please try again.";
+}
+
+// ================= LOGIN =================
+$("login-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const errBox = $("login-error");
+  errBox.classList.remove("show");
+  const email = $("login-email").value.trim();
+  const password = $("login-password").value;
+  const btn = $("login-submit");
+  btn.disabled = true;
+  btn.textContent = "Logging in…";
+  try {
+    await signInWithEmailAndPassword(auth, email, password);
+    // onAuthStateChanged below takes it from here
+  } catch (err) {
+    errBox.textContent = authErrorMessage(err);
+    errBox.classList.add("show");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Log in";
+  }
+});
+
+$("show-reset").addEventListener("click", (e) => {
+  e.preventDefault();
+  showScreen("screen-reset");
+});
+$("show-login").addEventListener("click", (e) => {
+  e.preventDefault();
+  showScreen("screen-login");
+});
+
+// ================= PASSWORD RESET =================
+$("reset-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const errBox = $("reset-error");
+  const okBox = $("reset-success");
+  errBox.classList.remove("show");
+  okBox.classList.remove("show");
+  const email = $("reset-email").value.trim();
+  const btn = $("reset-submit");
+  btn.disabled = true;
+  try {
+    await sendPasswordResetEmail(auth, email);
+    okBox.textContent = "Reset link sent. Check your inbox.";
+    okBox.classList.add("show");
+  } catch (err) {
+    errBox.textContent = authErrorMessage(err);
+    errBox.classList.add("show");
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// ================= LOGOUT =================
+$("logout-btn").addEventListener("click", async () => {
+  const ok = await confirmDialog("Log out?", "You'll need to sign in again to continue.");
+  if (ok) await signOut(auth);
+});
+
+// ================= BOOTSTRAP (first-run, initial admin only) =================
+$("bootstrap-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const errBox = $("bootstrap-error");
+  errBox.classList.remove("show");
+  const schoolName = $("bs-school-name").value.trim();
+  const adminName = $("bs-admin-name").value.trim();
+  const btn = $("bootstrap-submit");
+  btn.disabled = true;
+  btn.textContent = "Setting up…";
+
+  const user = auth.currentUser;
+  try {
+    // Deterministic schoolId from uid keeps this a single, idempotent write pair —
+    // no server-generated IDs needed for a one-time bootstrap.
+    const schoolId = `school_${user.uid.slice(0, 12)}`;
+
+    await setDoc(doc(db, "schools", schoolId), {
+      name: schoolName,
+      logo: "",
+      address: "",
+      phone: "",
+      email: user.email,
+      website: "",
+      motto: "",
+      active: true,
+      createdAt: serverTimestamp(),
+    });
+
+    await setDoc(doc(db, "users", user.uid), {
+      email: user.email,
+      fullName: adminName,
+      role: "schoolAdmin",
+      schoolId,
+      active: true,
+      photoURL: "",
+      createdAt: serverTimestamp(),
+    });
+
+    toast("School created. Welcome to EduNexa.");
+    await enterApp(user);
+  } catch (err) {
+    console.error(err);
+    errBox.textContent = "Couldn't complete setup. " + (err.message || "");
+    errBox.classList.add("show");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Create school & continue";
+  }
+});
+
+// ================= AUTH STATE / ROUTING =================
+onAuthStateChanged(auth, async (user) => {
+  if (!user) {
+    showScreen("screen-login");
+    return;
+  }
+
+  showScreen("splash");
+
+  let profileSnap;
+  try {
+    profileSnap = await getDoc(doc(db, "users", user.uid));
+  } catch (err) {
+    console.error(err);
+    toast("Couldn't reach the database. Check your connection.", "bad");
+    showScreen("screen-login");
+    return;
+  }
+
+  if (!profileSnap.exists()) {
+    if (user.email === INITIAL_ADMIN_EMAIL) {
+      showScreen("screen-bootstrap");
+    } else {
+      // Any other account with no profile doc has no valid role yet —
+      // an Admin needs to create it. Never let them into the app.
+      toast("Your account isn't set up yet. Contact your School Admin.", "bad");
+      await signOut(auth);
+      showScreen("screen-login");
+    }
+    return;
+  }
+
+  await enterApp(user, profileSnap.data());
+});
+
+// ================= APP ENTRY / ROLE-BASED SHELL =================
+const NAV_BY_ROLE = {
+  superAdmin: [
+    { id: "dashboard", label: "Dashboard" },
+    { id: "schools", label: "Schools" },
+    { id: "admins", label: "School Admins" },
+    { id: "profile", label: "Profile" },
+  ],
+  schoolAdmin: [
+    { id: "dashboard", label: "Dashboard" },
+    { id: "students", label: "Students" },
+    { id: "teachers", label: "Teachers" },
+    { id: "classes", label: "Classes" },
+    { id: "subjects", label: "Subjects" },
+    { id: "fees", label: "Fees" },
+    { id: "announcements", label: "Announcements" },
+    { id: "settings", label: "Settings" },
+    { id: "profile", label: "Profile" },
+  ],
+  teacher: [
+    { id: "dashboard", label: "Dashboard" },
+    { id: "attendance", label: "Attendance" },
+    { id: "results", label: "Result Entry" },
+    { id: "announcements", label: "Announcements" },
+    { id: "profile", label: "Profile" },
+  ],
+  student: [
+    { id: "dashboard", label: "Dashboard" },
+    { id: "results", label: "Results" },
+    { id: "attendance", label: "Attendance" },
+    { id: "fees", label: "Fees" },
+    { id: "announcements", label: "Announcements" },
+    { id: "profile", label: "Profile" },
+  ],
+};
+
+const ROLE_LABEL = {
+  superAdmin: "Super Admin",
+  schoolAdmin: "School Admin",
+  teacher: "Teacher",
+  student: "Student",
+};
+
+async function enterApp(user, profile) {
+  if (!profile) {
+    const snap = await getDoc(doc(db, "users", user.uid));
+    profile = snap.data();
+  }
+
+  if (profile.active === false) {
+    toast("This account has been deactivated. Contact your School Admin.", "bad");
+    await signOut(auth);
+    showScreen("screen-login");
+    return;
+  }
+
+  $("who-label").textContent = `${profile.fullName || user.email} · ${ROLE_LABEL[profile.role] || profile.role}`;
+
+  buildSidebar(profile.role);
+  renderView("dashboard", profile);
+  showScreen("app");
+}
+
+function buildSidebar(role) {
+  const nav = $("sidebar-nav");
+  nav.innerHTML = "";
+  const items = NAV_BY_ROLE[role] || NAV_BY_ROLE.student;
+  items.forEach((item, i) => {
+    const a = document.createElement("a");
+    a.href = "#";
+    a.textContent = item.label;
+    a.dataset.view = item.id;
+    if (i === 0) a.classList.add("active");
+    a.addEventListener("click", (e) => {
+      e.preventDefault();
+      nav.querySelectorAll("a").forEach((x) => x.classList.remove("active"));
+      a.classList.add("active");
+      $("sidebar").classList.remove("open");
+      renderView(item.id, currentProfile);
+    });
+    nav.appendChild(a);
+  });
+}
+
+$("menu-toggle").addEventListener("click", () => $("sidebar").classList.toggle("open"));
+
+let currentProfile = null;
+
+function renderView(viewId, profile) {
+  currentProfile = profile;
+  $("page-title").textContent = viewId.charAt(0).toUpperCase() + viewId.slice(1);
+  const content = $("content");
+
+  if (viewId === "dashboard") {
+    content.innerHTML = dashboardHTML(profile.role);
+    return;
+  }
+
+  // Phase 1 ships auth + shell only — every other view is an honest
+  // "not built yet" placeholder rather than a fake working screen.
+  content.innerHTML = `
+    <div class="panel">
+      <div class="state-box">
+        <p>${viewId.charAt(0).toUpperCase() + viewId.slice(1)} isn't built yet.</p>
+        <p style="font-size:0.85rem;">This arrives in a later phase, once you've confirmed Phase 1.</p>
+      </div>
+    </div>`;
+}
+
+function dashboardHTML(role) {
+  if (role === "superAdmin") {
+    return statGrid(["Total schools", "Active schools", "School admins", "Platform activity"]);
+  }
+  if (role === "schoolAdmin") {
+    return (
+      statGrid(["Students", "Teachers", "Classes", "Subjects", "Outstanding fees"]) +
+      emptyPanel("Recent activity", "No activity yet — it will show up here once your school has data.")
+    );
+  }
+  if (role === "teacher") {
+    return emptyPanel("Your classes", "No classes assigned yet. Your School Admin will assign you classes and subjects.");
+  }
+  // student
+  return emptyPanel("Welcome", "Your class, results, and attendance will appear here once your School Admin sets up your profile.");
+}
+
+function statGrid(labels) {
+  return `<div class="stat-grid">${labels
+    .map((l) => `<div class="stat-card"><div class="num">0</div><div class="label">${l}</div></div>`)
+    .join("")}</div>`;
+}
+
+function emptyPanel(title, message) {
+  return `<div class="panel"><h3>${title}</h3><div class="state-box">${message}</div></div>`;
+}
+</script>
+</body>
+</html>
