@@ -535,8 +535,15 @@ function authErrorMessage(err) {
     "auth/invalid-credential": "Incorrect email or password.",
     "auth/too-many-requests": "Too many attempts. Please wait a moment and try again.",
     "auth/network-request-failed": "Network error — check your connection.",
+    "auth/unauthorized-domain": "This site's domain isn't authorized in Firebase yet (Authentication → Settings → Authorized domains).",
+    "auth/operation-not-allowed": "Email/Password sign-in isn't enabled yet (Authentication → Sign-in method).",
+    "auth/api-key-not-valid.-please-pass-a-valid-api-key.": "Firebase API key looks invalid — check firebaseConfig.",
+    "auth/user-disabled": "This account has been disabled.",
   };
-  return map[code] || "Something went wrong. Please try again.";
+  // Show the raw code too — on mobile there's no easy console to check, so
+  // this is the fastest way to see exactly what Firebase is rejecting.
+  const friendly = map[code];
+  return friendly ? `${friendly} (${code})` : `Something went wrong. (${code || "no error code"})`;
 }
 
 // ================= LOGIN =================
