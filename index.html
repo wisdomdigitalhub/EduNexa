@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Report X — Smarter School Results. Better Academic Records.</title>
+<title>EduNexa — Smarter School Results. Better Academic Records.</title>
 <meta name="theme-color" content="#0f172a" />
 <link rel="manifest" href="manifest.json" />
 <link rel="apple-touch-icon" href="icons/icon-192.png" />
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
 /* =====================================================================
-   REPORT X — DESIGN SYSTEM
+   EDUNEXA — DESIGN SYSTEM
    ===================================================================== */
 :root{
   --bg:#f6f7fb; --surface:#ffffff; --surface-2:#f1f3f9; --border:#e4e7ef;
@@ -139,7 +139,7 @@ th{color:var(--text-dim);font-size:11px;text-transform:uppercase;letter-spacing:
   <div class="center-screen" id="startupScreen">
     <div class="card auth-card" style="text-align:center">
       <div class="topbar brand" style="font-size:24px;justify-content:center;border:none;padding:0">
-        Report X
+        EduNexa
       </div>
       <p>Smarter School Results. Better Academic Records.</p>
       <div class="skeleton" style="height:8px;width:100%;margin:18px 0 10px"></div>
@@ -158,19 +158,19 @@ th{color:var(--text-dim);font-size:11px;text-transform:uppercase;letter-spacing:
       '<div class="center-screen">' +
         '<div class="card auth-card" style="text-align:center">' +
           '<div style="font-size:42px;margin-bottom:8px">⚠️</div>' +
-          '<h3>Report X could not start</h3>' +
+          '<h3>EduNexa could not start</h3>' +
           '<p>' + message + '</p>' +
           '<button class="btn" style="width:100%;margin-top:8px" onclick="location.reload()">Reload</button>' +
         '</div>' +
       '</div>';
   }
   window.addEventListener("error", function(e){
-    if (e && e.message) console.error("Report X startup error:", e.error || e.message);
+    if (e && e.message) console.error("EduNexa startup error:", e.error || e.message);
   });
   window.addEventListener("unhandledrejection", function(e){
-    console.error("Report X unhandled rejection:", e.reason);
+    console.error("EduNexa unhandled rejection:", e.reason);
   });
-  window.__reportXStartupError = showStartupError;
+  window.__eduNexaStartupError = showStartupError;
 })();
 </script>
 
@@ -179,8 +179,8 @@ th{color:var(--text-dim);font-size:11px;text-transform:uppercase;letter-spacing:
   window.setTimeout(function(){
     var app = document.getElementById("app");
     if (app && app.querySelector("#startupScreen")) {
-      if (window.__reportXStartupError) {
-        window.__reportXStartupError("The app is taking too long to load. Check your internet connection and reload the page.");
+      if (window.__eduNexaStartupError) {
+        window.__eduNexaStartupError("The app is taking too long to load. Check your internet connection and reload the page.");
       }
     }
   }, 15000);
@@ -202,13 +202,13 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyB-f85f6GRZd6XT8FhuklN6onzoAaDeceY",
-  authDomain: "report-x-fd97e.firebaseapp.com",
-  projectId: "report-x-fd97e",
-  storageBucket: "report-x-fd97e.firebasestorage.app",
-  messagingSenderId: "328964980773",
-  appId: "1:328964980773:web:b688965d85e4b95ffb3fcc",
-  measurementId: "G-FTCVFSMM4J"
+  apiKey: "AIzaSyCn6urjZ6tKBJTgBv9mjywQTKeoaZIhFYw",
+  authDomain: "edunexa-70b24.firebaseapp.com",
+  projectId: "edunexa-70b24",
+  storageBucket: "edunexa-70b24.firebasestorage.app",
+  messagingSenderId: "845157830674",
+  appId: "1:845157830674:web:b8a83619da9249a38fc8cb",
+  measurementId: "G-FYMKF3C4T8"
 };
 // NOTE: No Firebase Storage is used anywhere in this app, by design (see spec §2, §138).
 
@@ -457,7 +457,7 @@ onAuthStateChanged(auth, async (u)=>{
     State.activeSchool=null; State.activeMembership=null; navigate("login"); return; }
   navigate("loading");
   try{ await loadUserContext(); }
-  catch(e){ console.error("Report X error:", e); toast(authErrorMessage(e)); navigate("login"); }
+  catch(e){ console.error("EduNexa error:", e); toast(authErrorMessage(e)); navigate("login"); }
 });
 
 async function doLogin(email, password, btn){
@@ -513,7 +513,7 @@ function viewLogin(){
   };
   card.append(
     el("div",{style:"text-align:center;margin-bottom:18px"},[
-      el("div",{class:"topbar brand", style:"font-size:24px;justify-content:center;border:none;padding:0"},"Report X"),
+      el("div",{class:"topbar brand", style:"font-size:24px;justify-content:center;border:none;padding:0"},"EduNexa"),
       el("p",{},TAGLINE)
     ]),
     el("div",{class:"field"},[el("label",{},"Email"), email]),
@@ -569,7 +569,7 @@ function viewRedeemInvite(){
   }
   card.append(
     el("div",{style:"text-align:center;margin-bottom:18px"},[
-      el("div",{class:"topbar brand", style:"font-size:24px;justify-content:center;border:none;padding:0"},"Report X"),
+      el("div",{class:"topbar brand", style:"font-size:24px;justify-content:center;border:none;padding:0"},"EduNexa"),
       el("p",{},"Join your school as a Teacher, Parent, or other invited staff using the codes your school gave you.")
     ]),
     ...fields,
@@ -691,7 +691,7 @@ function viewRegisterSchool(){
     nav.append(back, next);
   }
   renderStep();
-  card.append(el("div",{class:"topbar brand", style:"border:none;padding:0 0 12px;font-size:20px"},"Report X — School Registration"), dots, body, nav);
+  card.append(el("div",{class:"topbar brand", style:"border:none;padding:0 0 12px;font-size:20px"},"EduNexa — School Registration"), dots, body, nav);
   wrap.appendChild(card);
   return wrap;
 }
@@ -727,7 +727,7 @@ function navItemsForRole(){
 function shell(contentEl){
   const root = el("div");
   const top = el("div",{class:"topbar"},[
-    el("span",{class:"brand"},"Report X"),
+    el("span",{class:"brand"},"EduNexa"),
     el("span",{class:"spacer"}),
     State.activeMembership ? el("span",{class:"badge blue"}, ROLE_LABELS[effectiveRole()]) : null,
     el("button",{class:"icon-btn", onclick:()=>setTheme(State.theme==="dark"?"light":"dark"), title:"Toggle theme"},"🌓"),
@@ -1245,7 +1245,7 @@ function scaffoldView(title, note){
   return shell(el("div",{},[
     el("h2",{},title),
     el("div",{class:"card"},[
-      el("p",{},note || "This module is scaffolded per the Report X spec and ready to extend using the Firestore collections, permission helpers, and UI primitives already defined in this file."),
+      el("p",{},note || "This module is scaffolded per the EduNexa spec and ready to extend using the Firestore collections, permission helpers, and UI primitives already defined in this file."),
     ])
   ]));
 }
@@ -1290,7 +1290,7 @@ async function render(){
     const result = await view(State.routeParams);
     appRoot.appendChild(result);
   }catch(e){
-    console.error("Report X render error:", e);
+    console.error("EduNexa render error:", e);
     appRoot.appendChild(el("div",{class:"center-screen"},[
       el("div",{class:"card", style:"text-align:center;max-width:420px"},[
         el("h3",{},"Something went wrong"),
@@ -1692,6 +1692,100 @@ navItemsForRole=function(){
 };
 /* expose safe helper for login bootstrap diagnostics */
 window.EduNexaPhase8={version:"8.0-complete-no-storage",routes:Object.keys(routes)};
+
+
+/* ================= EDU NEXA MANAGEMENT + PWA COMPLETION ================= */
+const EDU_ROLE_ALIASES={owner:'schoolAdmin',schoolAdmin:'schoolAdmin'};
+const _eduEffectiveRole=effectiveRole;
+effectiveRole=function(){ const r=_eduEffectiveRole(); return r==='owner'?'schoolAdmin':r; };
+ROLE_LABELS.schoolAdmin='School Admin';
+function eduSchool(){ return State.activeSchoolId || State.activeMembership?.schoolId || State.user?.schoolId || null; }
+function eduSchoolAdmin(){ return ['schoolAdmin','principal'].includes(effectiveRole()); }
+function eduSuper(){ return effectiveRole()==='superAdmin'; }
+function eduField(label,value,type='text'){ const i=el('input',{type,value:value??''}); return [el('label',{},label),i]; }
+function eduCard(title,body){ return el('div',{class:'card'},[el('h3',{},title),body]); }
+function eduDownloadButton(){
+  const b=el('button',{class:'btn secondary',id:'edu-install-btn',style:'display:none'},'⬇ Install EduNexa');
+  b.onclick=()=>{ if(window.__eduInstallPrompt){window.__eduInstallPrompt.prompt();window.__eduInstallPrompt.userChoice.finally(()=>{window.__eduInstallPrompt=null;b.style.display='none';});} else toast('Use your browser menu and choose Install app / Add to Home screen.'); };
+  setTimeout(()=>{ if(window.__eduCanInstall) b.style.display='inline-flex'; },0); return b;
+}
+async function eduEditDoc(collectionName,id,fields,title){
+  const body=el('div'); const inputs={};
+  Object.entries(fields).forEach(([k,v])=>{inputs[k]=el('input',{type:k.toLowerCase().includes('email')?'email':'text',value:v??''});body.appendChild(el('div',{class:'field'},[el('label',{},k),inputs[k]]));});
+  const f=el('div',{style:'display:flex;justify-content:flex-end;gap:8px'},[el('button',{class:'btn ghost',onclick:()=>document.querySelector('.modal-bg')?.remove()},'Cancel')]);
+  const bg=modal(title,body,f); f.appendChild(el('button',{class:'btn',onclick:async()=>{try{const data={};for(const k of Object.keys(inputs))data[k]=inputs[k].value.trim();data.updatedAt=serverTimestamp();await updateDoc(doc(db,collectionName,id),data);toast('Saved');bg.remove();navigate(State.route,State.routeParams);}catch(e){toast(authErrorMessage(e));}}},'Save changes'));
+}
+function eduToggle(collectionName,id,current){return async()=>{try{await updateDoc(doc(db,collectionName,id),{active:!current,status:!current?'active':'inactive',updatedAt:serverTimestamp()});toast(!current?'Activated':'Deactivated');navigate(State.route,State.routeParams);}catch(e){toast(authErrorMessage(e));}}}
+
+async function viewEduPlatformManagement(){
+ if(!eduSuper()) return scaffoldView('Access denied','Super Admin access is required.');
+ const schools=(await getDocs(query(col('schools'),orderBy('createdAt','desc'),limit(200)))).docs.map(d=>({id:d.id,...d.data()}));
+ const users=(await getDocs(query(col('users'),where('role','in',['owner','schoolAdmin'])))).docs.map(d=>({id:d.id,...d.data()}));
+ const wrap=el('div'); wrap.append(el('div',{class:'page-head'},[el('div',{},[el('h2',{},'Platform Management'),el('p',{},'Manage every school, School Admin account, status and platform settings.')]),eduDownloadButton()]));
+ const stats=el('div',{class:'grid grid-4'},[['Schools',schools.length],['Active',schools.filter(x=>x.active!==false&&x.subscriptionStatus!=='suspended').length],['School Admins',users.length],['Installable','Yes']].map(x=>el('div',{class:'card stat'},[el('div',{class:'num'},String(x[1])),el('div',{class:'lbl'},x[0])]))) ;wrap.append(stats);
+ const schoolRows=schools.map(s=>el('tr',{},[el('td',{},s.name||'—'),el('td',{},s.schoolCode||'—'),el('td',{},statusBadge(s.subscriptionStatus|| (s.active===false?'inactive':'active'))),el('td',{},[el('button',{class:'btn sm secondary',onclick:()=>navigate('superAdminSchoolDetail',{id:s.id})},'Manage'),el('button',{class:'btn sm',onclick:async()=>{await updateDoc(doc(db,'schools',s.id),{active:s.active===false,updatedAt:serverTimestamp()});toast('School status updated');navigate('platformManagement')}},s.active===false?'Activate':'Deactivate')])]));
+ wrap.append(eduCard('Schools',el('div',{class:'table-wrap'},[_table(['School','Code','Status','Actions'],schoolRows)])));
+ const adminRows=users.map(u=>el('tr',{},[el('td',{},u.displayName||u.email),el('td',{},u.email||'—'),el('td',{},schools.find(x=>x.id===u.schoolId)?.name||u.schoolId||'—'),el('td',{},_status(u.active===false?'inactive':'active')),el('td',{},el('button',{class:'btn sm secondary',onclick:async()=>{await updateDoc(doc(db,'users',u.id),{active:u.active===false,updatedAt:serverTimestamp()});toast('Admin status updated');navigate('platformManagement')}},u.active===false?'Activate':'Deactivate'))]));
+ wrap.append(eduCard('School Admin Accounts',el('div',{class:'table-wrap'},[_table(['Name','Email','School','Status',''],adminRows)])));
+ return shell(wrap);
+}
+
+async function viewEduSchoolManagement(){
+ if(!eduSchoolAdmin()) return scaffoldView('Access denied','School Admin access is required.');
+ const sid=eduSchool();
+ const [st,te,cl,su,as]=await Promise.all(['students','teachers','classes','subjects','teacherAssignments'].map(c=>getDocs(query(col(c),where('schoolId','==',sid),limit(300)))));
+ const wrap=el('div'); wrap.append(el('div',{class:'page-head'},[el('div',{},[el('h2',{},'School Management'),el('p',{},'One place for students, teachers, classes, subjects and teacher assignments.')]),eduDownloadButton()]));
+ wrap.append(el('div',{class:'grid grid-4'},[['Students',st.size,'students'],['Teachers',te.size,'teacherManagement'],['Classes',cl.size,'classes'],['Subjects',su.size,'subjects']].map(x=>el('div',{class:'card stat',style:'cursor:pointer'},[el('div',{class:'num'},String(x[1])),el('div',{class:'lbl'},x[0]),el('button',{class:'btn sm secondary',onclick:()=>navigate(x[2])},'Open')]))) );
+ wrap.append(eduCard('Quick Management',el('div',{class:'grid grid-2'},[
+   el('button',{class:'btn',onclick:()=>navigate('teacherManagement')},'🧑‍🏫 Manage Teachers'),
+   el('button',{class:'btn',onclick:()=>navigate('studentManagement')},'🎓 Manage Students'),
+   el('button',{class:'btn',onclick:()=>navigate('classes')},'🏷️ Manage Classes'),
+   el('button',{class:'btn',onclick:()=>navigate('subjects')},'📚 Manage Subjects'),
+   el('button',{class:'btn',onclick:()=>navigate('classAssignments')},'📋 Assign Teachers / Subjects'),
+   el('button',{class:'btn',onclick:()=>navigate('attendance')},'🗓️ Attendance / Academics')
+ ])));
+ wrap.append(eduCard('Account workflow',el('p',{},'Teachers and students receive real Firebase sign-in accounts. School Admin creates the account, gets a temporary password once, and can manage the profile/status afterward.')));
+ return shell(wrap);
+}
+
+async function viewEduTeachers(){
+ const sid=eduSchool(); const docs=(await getDocs(query(col('teachers'),where('schoolId','==',sid),limit(300)))).docs.map(d=>({id:d.id,...d.data()}));
+ const wrap=el('div'); const email=el('input',{type:'email',placeholder:'teacher@school.com'}),first=el('input',{placeholder:'First name'}),last=el('input',{placeholder:'Last name'}),phone=el('input',{placeholder:'Phone'});
+ const create=el('button',{class:'btn',onclick:async()=>{if(!first.value||!last.value||!email.value)return toast('Name and email are required');create.disabled=true;try{const pw=tempPassword(),u=await createManagedAccount(email.value,pw);await setDoc(doc(db,'teachers',u.uid),{uid:u.uid,schoolId:sid,firstName:first.value,lastName:last.value,email:email.value.trim().toLowerCase(),phone:phone.value,active:true,status:'active',assignedClasses:[],assignedSubjects:[],createdAt:serverTimestamp(),createdBy:State.user.uid});await setDoc(doc(db,'users',u.uid),{uid:u.uid,schoolId:sid,role:'teacher',active:true,email:email.value.trim().toLowerCase(),displayName:first.value+' '+last.value,createdAt:serverTimestamp(),createdBy:State.user.uid});await audit('teacher.created',{schoolId:sid,targetId:u.uid});toast('Teacher created. Temporary password: '+pw);navigate('teacherManagement');}catch(e){toast(authErrorMessage(e));}finally{create.disabled=false;}}},'Create Teacher');
+ wrap.append(el('div',{class:'page-head'},[el('div',{},[el('h2',{},'Teacher Management'),el('p',{},'Create, edit, activate/deactivate and assign teachers.')]),eduDownloadButton()]));
+ wrap.append(eduCard('Create Teacher',el('div',{class:'grid grid-2'},[el('div',{class:'field'},[el('label',{},'First name'),first]),el('div',{class:'field'},[el('label',{},'Last name'),last]),el('div',{class:'field'},[el('label',{},'Email'),email]),el('div',{class:'field'},[el('label',{},'Phone'),phone]),create])));
+ wrap.append(eduCard('Teachers',el('div',{class:'table-wrap'},[_table(['Teacher','Email','Phone','Status','Actions'],docs.map(t=>el('tr',{},[el('td',{},(t.firstName||'')+' '+(t.lastName||'')),el('td',{},t.email||'—'),el('td',{},t.phone||'—'),el('td',{},_status(t.active===false?'inactive':'active')),el('td',{},[el('button',{class:'btn sm secondary',onclick:()=>eduEditDoc('teachers',t.id,{firstName:t.firstName,lastName:t.lastName,phone:t.phone,email:t.email},'Edit Teacher')},'Edit'),el('button',{class:'btn sm',onclick:eduToggle('teachers',t.id,t.active!==false)},t.active===false?'Activate':'Deactivate')])])))])));
+ return shell(wrap);
+}
+
+async function viewEduStudents(){
+ const sid=eduSchool(); const docs=(await getDocs(query(col('students'),where('schoolId','==',sid),limit(300)))).docs.map(d=>({id:d.id,...d.data()}));
+ const wrap=el('div'); wrap.append(el('div',{class:'page-head'},[el('div',{},[el('h2',{},'Student Management'),el('p',{},'Manage profiles, admission numbers, class assignments and student login accounts.')]),eduDownloadButton()]));
+ const add=el('button',{class:'btn',onclick:async()=>{const first=prompt('First name');if(first===null)return;const last=prompt('Last name');if(last===null)return;const adm=prompt('Admission number');if(!adm)return;const email=prompt('Student login email');if(!email)return;try{const pw=tempPassword(),u=await createManagedAccount(email,pw);await setDoc(doc(db,'students',u.uid),{uid:u.uid,schoolId:sid,firstName:first,lastName:last,admissionNumber:adm,email:email.trim().toLowerCase(),active:true,status:'active',classId:null,guardianName:'',guardianPhone:'',createdAt:serverTimestamp(),createdBy:State.user.uid});await setDoc(doc(db,'users',u.uid),{uid:u.uid,schoolId:sid,role:'student',active:true,email:email.trim().toLowerCase(),displayName:first+' '+last,createdAt:serverTimestamp(),createdBy:State.user.uid});await audit('student.created',{schoolId:sid,targetId:u.uid});toast('Student created. Temporary password: '+pw);navigate('studentManagement');}catch(e){toast(authErrorMessage(e));}}},'Add Student + Login');
+ wrap.append(el('div',{class:'card'},[add]));
+ wrap.append(eduCard('Students',el('div',{class:'table-wrap'},[_table(['Student','Admission No.','Class','Email','Status','Actions'],docs.map(t=>el('tr',{},[el('td',{},(t.firstName||'')+' '+(t.lastName||'')),el('td',{},t.admissionNumber||'—'),el('td',{},t.className||t.classId||'Unassigned'),el('td',{},t.email||'—'),el('td',{},_status(t.active===false?'inactive':'active')),el('td',{},[el('button',{class:'btn sm secondary',onclick:()=>eduEditDoc('students',t.id,{firstName:t.firstName,lastName:t.lastName,admissionNumber:t.admissionNumber,email:t.email,className:t.className||''},'Edit Student')},'Edit'),el('button',{class:'btn sm',onclick:eduToggle('students',t.id,t.active!==false)},t.active===false?'Activate':'Deactivate')])])))])));
+ return shell(wrap);
+}
+
+async function viewEduDownload(){
+ const wrap=el('div'); wrap.append(el('div',{class:'page-head'},[el('div',{},[el('h2',{},'Install EduNexa'),el('p',{},'Install EduNexa as an app on Android, iPhone, Windows, Mac or Chromebook.')]) ,eduDownloadButton()]));
+ wrap.append(eduCard('How to install',el('ol',{},[el('li',{},'Open EduNexa in Chrome, Edge or Safari.'),el('li',{},'Tap the Install / Add to Home Screen option.'),el('li',{},'Launch EduNexa from your device like a normal app.'),el('li',{},'Your data remains in Firebase; installing the app does not create a second school database.')])));
+ wrap.append(eduCard('Offline-ready shell',el('p',{},'The app shell, login screen and installed application assets are cached by the service worker. Live school data still requires Firebase connectivity.'))); return shell(wrap);
+}
+
+routes.platformManagement=viewEduPlatformManagement; routes.schoolManagement=viewEduSchoolManagement; routes.teacherManagement=viewEduTeachers; routes.studentManagement=viewEduStudents; routes.downloadApp=viewEduDownload;
+const _eduNavBase=navItemsForRole;
+navItemsForRole=function(){ const r=effectiveRole(); const base=_eduNavBase(); if(r==='superAdmin'){base.unshift(['platformManagement','🛡️','Platform Management']);} if(r==='schoolAdmin'){base.unshift(['schoolManagement','🏫','School Management']); base.push(['teacherManagement','🧑‍🏫','Teachers'],['studentManagement','🎓','Students'],['downloadApp','⬇️','Install App']);} else if(r==='teacher'||r==='student'){base.push(['downloadApp','⬇️','Install App']);} return base; };
+
+// PWA install prompt
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();window.__eduInstallPrompt=e;window.__eduCanInstall=true;document.querySelectorAll('#edu-install-btn').forEach(b=>b.style.display='inline-flex');});
+window.addEventListener('appinstalled',()=>{window.__eduInstallPrompt=null;window.__eduCanInstall=false;toast('EduNexa installed successfully');});
+
+// Make the login page visibly offer installation even before authentication.
+const _eduViewLogin=viewLogin;
+viewLogin=function(){const v=_eduViewLogin();const card=v.querySelector('.card');if(card){const b=el('button',{class:'btn secondary',style:'width:100%;margin-top:10px',onclick:()=>navigate('downloadApp')},'⬇ Install / Download EduNexa App');card.appendChild(b);}return v;};
+routes.login=viewLogin;
+window.EduNexa={version:'8.1-management-pwa',name:'EduNexa'};
 
 </script>
 </body>
