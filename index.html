@@ -409,6 +409,7 @@ const State = {
   user: null,            // firebase auth user
   platformAdmin: null,   // platformAdmins/{uid} doc if any
   memberships: [],       // all schoolUsers docs for this uid
+  platformAdminStatus: null, // diagnostic status for platform-admin provisioning
   activeSchoolId: null,  // currently selected school (multi-school support)
   activeSchool: null,    // schools/{id} doc
   activeMembership: null,// schoolUsers doc for activeSchoolId
@@ -590,8 +591,12 @@ window.addEventListener("hashchange", ()=>{
    7. AUTH FLOWS
    ===================================================================== */
 async function loadUserContext(){
+  // Platform admins are platform-scoped and DO NOT need a school membership.
+  // The authoritative record is platformAdmins/{uid}; schoolUsers is only for
+  // school-scoped users.
   const uSnap = await getDoc(doc(db,"platformAdmins", State.user.uid));
-  State.platformAdmin = uSnap.exists() ? uSnap.data() : null;
+  State.platformAdmin = uSnap.exists() ? {id:uSnap.id, ...uSnap.data()} : null;
+  State.platformAdminStatus = State.platformAdmin ? "linked" : "missing";
 
   const q = query(col("schoolUsers"), where("uid","==",State.user.uid));
   const snap = await getDocs(q);
@@ -603,7 +608,9 @@ async function loadUserContext(){
     return;
   }
   if (State.memberships.length === 0){
-    navigate("noAccess");
+    // Do not describe a platform-admin account as "not linked to a school".
+    // Platform admins intentionally have no school membership.
+    navigate(State.platformAdminStatus === "missing" ? "platformAdminSetup" : "noAccess");
     return;
   }
   await selectSchool(State.memberships[0].schoolId);
@@ -887,6 +894,26 @@ function viewRegisterSchool(){
   renderStep();
   card.append(el("div",{class:"topbar brand", style:"border:none;padding:0 0 12px;font-size:20px"},"EduNexa — School Registration"), dots, body, nav);
   wrap.appendChild(card);
+  return wrap;
+}
+
+function viewPlatformAdminSetup(){
+  const wrap = el("div",{class:"center-screen"});
+  const uid = State.user?.uid || "—";
+  const copy = el("button",{class:"btn secondary",onclick:async()=>{try{await navigator.clipboard.writeText(uid);toast("UID copied")}catch(e){toast("UID: "+uid)}}},"Copy Firebase UID");
+  wrap.appendChild(el("div",{class:"card",style:"max-width:560px;text-align:center"},[
+    el("div",{style:"font-size:42px"},"🛡️"),
+    el("h3",{},"Platform Admin profile not provisioned"),
+    el("p",{},"This account is authenticated, but it has no platformAdmins/{uid} record. A platform admin does not need to be linked to a school."),
+    el("div",{class:"card",style:"text-align:left;margin:14px 0;background:var(--surface-2,#f7f7f8)"},[
+      el("strong",{},"Firebase project"),el("div",{},"edunexa-70b24"),
+      el("strong",{style:"display:block;margin-top:10px"},"Collection"),el("div",{},"platformAdmins"),
+      el("strong",{style:"display:block;margin-top:10px"},"Document ID / Auth UID"),el("div",{style:"word-break:break-all;font-family:monospace"},uid),
+      el("strong",{style:"display:block;margin-top:10px"},"Required field"),el("div",{},'level = "super"')
+    ]),
+    el("p",{class:"help"},"Create that document from Firebase Console using this exact UID, then sign out and sign in again. The Firestore rules intentionally prevent an ordinary browser user from granting themselves Super Admin."),
+    el("div",{style:"display:flex;gap:8px;justify-content:center;flex-wrap:wrap"},[copy,el("button",{class:"btn ghost",onclick:()=>signOut(auth)},"Sign out")])
+  ]));
   return wrap;
 }
 
@@ -1452,6 +1479,7 @@ const routes = {
   login: viewLogin,
   registerSchool: viewRegisterSchool,
   noAccess: viewNoAccess,
+  platformAdminSetup: viewPlatformAdminSetup,
   superAdminDashboard: viewSuperAdminDashboard,
   superAdminSchools: viewSuperAdminSchools,
   superAdminSchoolDetail: ()=>scaffoldView("School Detail","Full school profile, staff list, payment history, and audit trail for this school."),
