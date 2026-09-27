@@ -64,7 +64,7 @@ async function enxViewReviewResults(){
 
 async function enxViewReports(){
   const [results,students,subjects,classes,sessions,schoolSettings]=await Promise.all([ENX.schoolDocs('results'),ENX.schoolDocs('students'),ENX.schoolDocs('subjects'),ENX.schoolDocs('classes'),ENX.schoolDocs('academicSessions'),ENX.settings()]);
-  const sess=enxSelect('Session',sessions.map(s=>({value:s.id,label:s.name})),sessions.find(s=>s.active)?.id||''),term=enxSelect('Term',enxTermOptions(),schoolSettings.currentTerm||'First),cl=enxSelect('Class',[{value:'',label:'All classes'},...classes.map(c=>({value:c.id,label:ENX.labelClass(c)}))],''),st=enxSelect('Student',[{value:'',label:'All students'},...students.map(s=>({value:s.id,label:ENX.fullName(s)}))],'');
+  const sess=enxSelect('Session',sessions.map(s=>({value:s.id,label:s.name})),sessions.find(s=>s.active)?.id||''),term=enxSelect('Term',enxTermOptions(),schoolSettings.currentTerm||'First'),cl=enxSelect('Class',[{value:'',label:'All classes'},...classes.map(c=>({value:c.id,label:ENX.labelClass(c)}))],''),st=enxSelect('Student',[{value:'',label:'All students'},...students.map(s=>({value:s.id,label:ENX.fullName(s)}))],'');
   const run=enxButton('Generate Report',()=>renderReport());const area=el('div',{style:'margin-top:14px'});
   async function renderReport(){
     const rr=results.filter(r=>['published','locked','approved'].includes(r.status)&&(!sess.input.value||r.sessionId===sess.input.value)&&(!term.input.value||r.term===term.input.value)&&(!cl.input.value||r.classId===cl.input.value)&&(!st.input.value||r.studentId===st.input.value));
@@ -638,7 +638,7 @@ let __eduAuthSettled = false;
 onAuthStateChanged(auth, async (u)=>{
   __eduAuthSettled = true;
   State.user = u;
-  if (!u){ State.platformAdmin=null; State.memberships=[]; State.activeSchoolId=null;
+  if (!u){ State.loginAsGuardian=false; State.loginIntent='auto'; State.studentAccessChosen=false; State.platformAdmin=null; State.memberships=[]; State.activeSchoolId=null;
     State.activeSchool=null; State.activeMembership=null; navigate("login"); return; }
   navigate("loading");
   try{ await loadUserContext(); }
@@ -2587,6 +2587,23 @@ routes.teachers=enxViewTeachersComplete;
 routes.students=enxViewStudentsComplete;
 routes.students=enxViewStudentsComplete;
 
+// Repair aliases for older accounts created before code-login support. This is
+// run by the authorized school admin while viewing the management lists.
+const __studentsWithAliasRepair=enxViewStudentsComplete;
+enxViewStudentsComplete=async function(){
+  const result=await __studentsWithAliasRepair();
+  try{
+    const ss=await ENX.schoolDocs('students');
+    for(const st of ss){
+      const code=st.studentCode||st.accountCode;
+      if(code && st.email) await ensureLoginAlias(code,st.email,'student',_school());
+    }
+  }catch(e){console.warn('student login alias repair',e);}
+  return result;
+};
+routes.students=enxViewStudentsComplete;
+
+
 
 /* =====================================================================
    EduNexa v15 — complete access, parent/guardian access, billing pricing,
@@ -2605,63 +2622,90 @@ async function ensureLoginAlias(code, email, role, schoolId){
   },{merge:true});
 }
 async function resolveLoginIdentifier(identifier){
-  const value=String(identifier||'').trim();
-  if(value.includes('@')) return value.toLowerCase();
-  const code=value.toUpperCase();
+  const raw=String(identifier||'').trim();
+  if(!raw) throw new Error('Enter your email address or EduNexa account code.');
+  if(raw.includes('@')) return raw.toLowerCase();
+  // Account codes are intentionally forgiving about spaces/case, so users can
+  // enter STU-ABC123, stu-abc123, or STU - ABC123 and still reach the same alias.
+  const code=raw.toUpperCase().replace(/\s+/g,'');
   const snap=await getDoc(doc(db,'loginAliases',code));
-  if(!snap.exists() || snap.data().active===false) throw new Error('Login code not found or inactive.');
+  if(!snap.exists() || snap.data().active===false) throw new Error('Account code not found or inactive. Check the code exactly as shown on the credentials card.');
   const d=snap.data();
-  if(!d.authEmail) throw new Error('This login code is not configured correctly.');
-  return d.authEmail;
+  if(!d.authEmail) throw new Error('This account code is not configured correctly. Ask the school administrator to repair the login code.');
+  return String(d.authEmail).trim().toLowerCase();
 }
 
-const __originalDoLogin=doLogin;
-doLogin=async function(identifier,password,btn,loginMode='normal'){
+const __baseDoLoginV15=doLogin;
+doLogin=async function(identifier,password,btn){
   btn.disabled=true;
-  State.loginAsGuardian=loginMode==='parent';
+  State.loginAsGuardian=false;
+  State.loginIntent='auto';
+  State.studentAccessChosen=false;
   try{
     const email=await resolveLoginIdentifier(identifier);
     await signInWithEmailAndPassword(auth,email,password);
   }catch(e){toast(authErrorMessage(e));btn.disabled=false;}
 };
 
-// Replace the login screen so email OR generated code is accepted.
+// One login form for everybody. Students can use the exact same code/password
+// for themselves OR choose Parent/Guardian access immediately after sign-in.
 viewLogin=function(){
   const wrap=el('div',{class:'center-screen'}),card=el('div',{class:'card auth-card'});
-  const identifier=el('input',{type:'text',placeholder:'Email or EduNexa account code',autocomplete:'username'});
+  const identifier=el('input',{type:'text',placeholder:'Email or EduNexa account code',autocomplete:'username',autocapitalize:'none',spellcheck:'false'});
   const pass=el('input',{type:'password',placeholder:'Password',autocomplete:'current-password'});
-  const mode=enxSelect('Access type',[{value:'normal',label:'My account — Student / Teacher / Staff'},{value:'parent',label:'Parent / Guardian — use the student login details'}],'normal');
   const btn=el('button',{class:'btn',style:'width:100%;margin-top:6px'},'Sign In');
-  btn.onclick=()=>doLogin(identifier.value.trim(),pass.value,btn,mode.input.value);
+  btn.onclick=()=>doLogin(identifier.value.trim(),pass.value,btn);
+  pass.addEventListener('keydown',e=>{if(e.key==='Enter')btn.click();});
   const forgot=el('a',{style:'font-size:12px;cursor:pointer'},'Forgot password?');
   forgot.onclick=async()=>{
-    if(!identifier.value)return toast('Enter your email address first for password recovery.');
+    if(!identifier.value)return toast('Enter your email address or account code first.');
     try{const email=await resolveLoginIdentifier(identifier.value);await sendPasswordResetEmail(auth,email);toast('Password reset email sent.');}
     catch(e){toast(authErrorMessage(e));}
   };
   card.append(
     el('div',{style:'text-align:center;margin-bottom:18px'},[
       el('div',{class:'topbar brand',style:'font-size:24px;justify-content:center;border:none;padding:0'},'EduNexa'),
-      el('p',{},TAGLINE)
+      el('p',{},TAGLINE),
+      el('p',{style:'font-size:12px;color:var(--muted);margin-top:8px'},'Students, teachers and parents can use their EduNexa account code or email with the same password field.')
     ]),
-    el('div',{class:'field'},[el('label',{},'Email or Account Code'),identifier]),
-    mode.wrap,
+    el('div',{class:'field'},[el('label',{},'Email or EduNexa Account Code'),identifier]),
     el('div',{class:'field'},[el('label',{},'Password'),pass]),btn,
     el('div',{style:'display:flex;justify-content:space-between;margin-top:12px'},[
       forgot,el('a',{style:'font-size:12px;cursor:pointer',onclick:()=>navigate('registerSchool')},'Register your school')
     ]),
-    el('div',{style:'text-align:center;margin-top:14px;padding-top:14px;border-top:1px solid var(--border)'},[
-      el('a',{style:'font-size:12px;cursor:pointer;font-weight:700',onclick:()=>navigate('redeemInvite')},'Have a school/invitation code? Join →')
-    ])
+    el('div',{style:'margin-top:14px;padding:12px;border:1px solid var(--border);border-radius:12px;font-size:12px;color:var(--muted)'},'For a student account, the same student code and password can open either the student dashboard or the Parent / Guardian view after successful sign-in.')
   );
   wrap.appendChild(card);return wrap;
 };
 
-// Make the current authenticated account context remember guardian mode.
+// A student account is allowed to enter either the student view or the
+// Parent / Guardian view without needing a second set of credentials.
+// Teacher/parent/staff accounts continue directly to their normal dashboard.
 const __oldRoleHomeV15=roleHomeRoute;
 roleHomeRoute=function(){
-  if(State.loginAsGuardian && (effectiveRole()==='student')) return 'parentDashboard';
+  if(effectiveRole()==='student' && State.loginIntent==='auto' && !State.studentAccessChosen) return 'studentAccessChoice';
+  if(State.loginAsGuardian && effectiveRole()==='student') return 'parentDashboard';
   return __oldRoleHomeV15();
+};
+
+routes.studentAccessChoice=async function(){
+  if(effectiveRole()!=='student') return scaffoldView('Access denied','Student access is required.');
+  const student=await getDoc(doc(db,'students',State.user.uid));
+  const d=student.exists()?student.data():{};
+  const choose=(guardian)=>{
+    State.studentAccessChosen=true;
+    State.loginAsGuardian=guardian;
+    navigate(guardian?'parentDashboard':'studentDashboard');
+  };
+  return shell(el('div',{class:'center-screen'},[el('div',{class:'card auth-card'},[
+    el('h2',{},'Welcome to EduNexa'),
+    el('p',{style:'color:var(--muted)'},`Signed in as ${ENX.fullName(d)||State.user.email||'Student'}. Use the same account credentials for either view.`),
+    el('div',{style:'display:grid;gap:10px;margin-top:18px'},[
+      enxButton('Continue as Student',()=>choose(false)),
+      enxButton('Continue as Parent / Guardian',()=>choose(true),'btn secondary')
+    ]),
+    el('p',{style:'font-size:12px;color:var(--muted);margin-top:14px'},'Parent / Guardian view shows the linked student information, results, attendance, fees and announcements available to that student account.')
+  ])]));
 };
 
 // Parent dashboard supports both a real parent account and the requested
