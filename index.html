@@ -382,7 +382,6 @@ const firebaseConfig = {
   apiKey: "AIzaSyCn6urjZ6tKBJTgBv9mjywQTKeoaZIhFYw",
   authDomain: "edunexa-70b24.firebaseapp.com",
   projectId: "edunexa-70b24",
-  storageBucket: "edunexa-70b24.firebasestorage.app",
   messagingSenderId: "845157830674",
   appId: "1:845157830674:web:b8a83619da9249a38fc8cb",
   measurementId: "G-FYMKF3C4T8"
@@ -399,8 +398,8 @@ const ROLE_LABELS = {
   superAdmin:"Super Admin", supportAdmin:"Support Admin", owner:"School Owner", schoolAdmin:"School Admin", principal:"Principal",
   vicePrincipal:"Vice Principal", registrar:"Registrar", teacher:"Teacher", printer:"Report Printer", parent:"Parent"
 };
-const SUBSCRIPTION_PRICE_DEFAULT = 10000; // NGN, configurable by Super Admin (§7)
-const PAYMENT_DEFAULT = { method:"MoniePoint", accountName:"Wisdom Ebube Daniel", accountNumber:"9041498427" };
+const SUBSCRIPTION_PRICE_DEFAULT = null; // Must be configured by Super Admin per academic year.
+const PAYMENT_DEFAULT = {}; // Payment details must be configured by Super Admin.
 
 /* =====================================================================
    2. GLOBAL STATE
@@ -2587,6 +2586,382 @@ async function enxViewStudentsComplete(){
 routes.teachers=enxViewTeachersComplete;
 routes.students=enxViewStudentsComplete;
 routes.students=enxViewStudentsComplete;
+
+
+/* =====================================================================
+   EduNexa v15 — complete access, parent/guardian access, billing pricing,
+   and no-Storage hardening patch.
+   ===================================================================== */
+
+// Login-code aliases let the normal Firebase email/password authentication
+// remain the security boundary while allowing users to enter an EduNexa code.
+async function ensureLoginAlias(code, email, role, schoolId){
+  if(!code || !email) return;
+  const normalized=String(code).trim().toUpperCase();
+  if(!normalized) return;
+  await setDoc(doc(db,'loginAliases',normalized),{
+    authEmail:String(email).trim().toLowerCase(), role:role||null,
+    schoolId:schoolId||null, active:true, updatedAt:serverTimestamp()
+  },{merge:true});
+}
+async function resolveLoginIdentifier(identifier){
+  const value=String(identifier||'').trim();
+  if(value.includes('@')) return value.toLowerCase();
+  const code=value.toUpperCase();
+  const snap=await getDoc(doc(db,'loginAliases',code));
+  if(!snap.exists() || snap.data().active===false) throw new Error('Login code not found or inactive.');
+  const d=snap.data();
+  if(!d.authEmail) throw new Error('This login code is not configured correctly.');
+  return d.authEmail;
+}
+
+const __originalDoLogin=doLogin;
+doLogin=async function(identifier,password,btn,loginMode='normal'){
+  btn.disabled=true;
+  State.loginAsGuardian=loginMode==='parent';
+  try{
+    const email=await resolveLoginIdentifier(identifier);
+    await signInWithEmailAndPassword(auth,email,password);
+  }catch(e){toast(authErrorMessage(e));btn.disabled=false;}
+};
+
+// Replace the login screen so email OR generated code is accepted.
+viewLogin=function(){
+  const wrap=el('div',{class:'center-screen'}),card=el('div',{class:'card auth-card'});
+  const identifier=el('input',{type:'text',placeholder:'Email or EduNexa account code',autocomplete:'username'});
+  const pass=el('input',{type:'password',placeholder:'Password',autocomplete:'current-password'});
+  const mode=enxSelect('Access type',[{value:'normal',label:'My account — Student / Teacher / Staff'},{value:'parent',label:'Parent / Guardian — use the student login details'}],'normal');
+  const btn=el('button',{class:'btn',style:'width:100%;margin-top:6px'},'Sign In');
+  btn.onclick=()=>doLogin(identifier.value.trim(),pass.value,btn,mode.input.value);
+  const forgot=el('a',{style:'font-size:12px;cursor:pointer'},'Forgot password?');
+  forgot.onclick=async()=>{
+    if(!identifier.value)return toast('Enter your email address first for password recovery.');
+    try{const email=await resolveLoginIdentifier(identifier.value);await sendPasswordResetEmail(auth,email);toast('Password reset email sent.');}
+    catch(e){toast(authErrorMessage(e));}
+  };
+  card.append(
+    el('div',{style:'text-align:center;margin-bottom:18px'},[
+      el('div',{class:'topbar brand',style:'font-size:24px;justify-content:center;border:none;padding:0'},'EduNexa'),
+      el('p',{},TAGLINE)
+    ]),
+    el('div',{class:'field'},[el('label',{},'Email or Account Code'),identifier]),
+    mode.wrap,
+    el('div',{class:'field'},[el('label',{},'Password'),pass]),btn,
+    el('div',{style:'display:flex;justify-content:space-between;margin-top:12px'},[
+      forgot,el('a',{style:'font-size:12px;cursor:pointer',onclick:()=>navigate('registerSchool')},'Register your school')
+    ]),
+    el('div',{style:'text-align:center;margin-top:14px;padding-top:14px;border-top:1px solid var(--border)'},[
+      el('a',{style:'font-size:12px;cursor:pointer;font-weight:700',onclick:()=>navigate('redeemInvite')},'Have a school/invitation code? Join →')
+    ])
+  );
+  wrap.appendChild(card);return wrap;
+};
+
+// Make the current authenticated account context remember guardian mode.
+const __oldRoleHomeV15=roleHomeRoute;
+roleHomeRoute=function(){
+  if(State.loginAsGuardian && (effectiveRole()==='student')) return 'parentDashboard';
+  return __oldRoleHomeV15();
+};
+
+// Parent dashboard supports both a real parent account and the requested
+// student-credentials guardian access mode.
+enxViewParentDashboard=async function(){
+  if(State.loginAsGuardian && effectiveRole()==='student'){
+    const [st,results,attendance,fees,payments,anns]=await Promise.all([
+      getDoc(doc(db,'students',State.user.uid)),
+      ENX.schoolDocs('results',[where('studentId','==',State.user.uid)]),
+      ENX.schoolDocs('attendance',[where('studentId','==',State.user.uid)]),
+      ENX.schoolDocs('fees'),
+      ENX.schoolDocs('payments',[where('studentId','==',State.user.uid)]),
+      ENX.schoolDocs('announcements')
+    ]);
+    const student=st.exists()?st.data():{};
+    const published=results.filter(r=>['published','locked','approved'].includes(r.status));
+    const confirmed=payments.filter(p=>p.status==='confirmed').reduce((a,p)=>a+ENX.num(p.amount),0);
+    const due=fees.filter(f=>f.active!==false && (!f.classId || f.classId===student.classId)).reduce((a,f)=>a+ENX.num(f.amount),0);
+    const balance=Math.max(0,due-confirmed);
+    return shell(el('div',{},[
+      enxPage('Parent / Guardian Dashboard','Accessing the linked student using the student login details.'),
+      el('div',{class:'grid grid-4'},[
+        ['Student',ENX.fullName(student)],['Results',published.length],['Attendance',attendance.length?Math.round(attendance.filter(a=>a.status==='Present').length/attendance.length*100)+'%':'—'],['Balance',enxMoney(balance)]
+      ].map(x=>el('div',{class:'card stat'},[el('div',{class:'num',style:'font-size:18px'},String(x[1])),el('div',{class:'lbl'},x[0])]))),
+      el('div',{class:'card'},[
+        el('h3',{},ENX.fullName(student)),
+        el('p',{},`Admission: ${student.admissionNumber||'—'} • Class: ${student.className||student.classId||'Unassigned'}`),
+        el('div',{style:'display:flex;gap:8px;flex-wrap:wrap'},[
+          enxButton('Results',()=>navigate('myResults')),
+          enxButton('Attendance',()=>navigate('myAttendance'),'btn secondary'),
+          enxButton('Fees & Payments',()=>navigate('myFees'),'btn secondary'),
+          enxButton('Announcements',()=>navigate('announcements'),'btn secondary')
+        ])
+      ])
+    ]));
+  }
+  const links=await ENX.schoolDocs('parentLinks',[where('parentUid','==',State.user.uid)]);
+  const cards=[];
+  for(const l of links){
+    const st=await getDoc(doc(db,'students',l.studentId));
+    const student=st.exists()?st.data():{};
+    cards.push(el('div',{class:'card'},[
+      el('h3',{},l.studentName||ENX.fullName(student)||l.studentId),
+      el('p',{},l.className||student.className||'—'),
+      enxButton('Open Student Information',()=>{State.parentChildId=l.studentId;navigate('parentChild')})
+    ]));
+  }
+  return shell(el('div',{},[enxPage('My Children','Linked students and academic information'),cards.length?el('div',{class:'grid grid-2'},cards):enxEmpty('No children are linked to this parent account yet.','👨‍👩‍👧')]));
+};
+
+// Parent account detail page for a genuine parent role.
+async function enxViewParentChild(){
+  if(effectiveRole()!=='parent') return enxViewParentDashboard();
+  const links=await ENX.schoolDocs('parentLinks',[where('parentUid','==',State.user.uid)]);
+  const link=links.find(x=>x.studentId===State.parentChildId)||links[0];
+  if(!link)return enxEmpty('No linked child found.','👨‍👩‍👧');
+  const [st,results,attendance,payments]=await Promise.all([
+    getDoc(doc(db,'students',link.studentId)),ENX.schoolDocs('results',[where('studentId','==',link.studentId)]),
+    ENX.schoolDocs('attendance',[where('studentId','==',link.studentId)]),ENX.schoolDocs('payments',[where('studentId','==',link.studentId)])
+  ]);
+  const s=st.exists()?st.data():{};
+  return shell(el('div',{},[
+    enxPage(ENX.fullName(s),'Linked child academic record',[enxButton('Back',()=>navigate('parentDashboard'),'btn secondary')]),
+    el('div',{class:'grid grid-3'},[
+      ['Published Results',results.filter(r=>['published','locked','approved'].includes(r.status)).length],
+      ['Attendance Records',attendance.length],
+      ['Confirmed Payments',enxMoney(payments.filter(p=>p.status==='confirmed').reduce((a,p)=>a+ENX.num(p.amount),0))]
+    ].map(x=>el('div',{class:'card stat'},[el('div',{class:'num'},String(x[1])),el('div',{class:'lbl'},x[0])]))),
+    el('div',{class:'card'},[el('h3',{},'Student Information'),el('p',{},`Admission: ${s.admissionNumber||'—'}`),el('p',{},`Class: ${s.className||'—'}`),el('p',{},`Academic status: ${s.academicStatus||s.status||'—'}`)])
+  ]));
+}
+
+// Complete student creation: chosen password, generated code, and optional
+// parent account using the same student credentials when requested.
+const __studentViewV15=enxViewStudentsComplete;
+enxViewStudentsComplete=async function(){
+  const [students,classes]=await Promise.all([ENX.schoolDocs('students'),ENX.schoolDocs('classes')]);
+  for(const s of students){if(s.studentCode && s.email){try{await ensureLoginAlias(s.studentCode,s.email,'student',_school());}catch(e){console.warn(e)}}}
+  const add=enxButton('＋ Add Student',()=>{
+    const first=enxInput('First name','text',''),middle=enxInput('Middle name','text',''),last=enxInput('Last name','text',''),adm=enxInput('Admission number','text',''),email=enxInput('Student email','email',''),password=enxInput('Password (choose for student)','password','',{autocomplete:'new-password',minlength:6}),phone=enxInput('Phone','tel',''),gender=enxSelect('Gender',[{value:'',label:'Select'},{value:'Male',label:'Male'},{value:'Female',label:'Female'}]),dob=enxInput('Date of birth','date',''),address=enxInput('Address','text',''),admissionDate=enxInput('Admission date','date',new Date().toISOString().slice(0,10)),cl=enxSelect('Class',[{value:'',label:'Unassigned'},...classes.map(c=>({value:c.id,label:ENX.labelClass(c)}))]),status=enxSelect('Academic status',[{value:'active',label:'Active'},{value:'graduated',label:'Graduated'},{value:'transferred',label:'Transferred'},{value:'inactive',label:'Inactive'}],'active'),guardian=enxInput('Parent / Guardian name','text',''),guardianPhone=enxInput('Parent / Guardian phone','tel',''),guardianEmail=enxInput('Parent / Guardian email','email',''),emergency=enxInput('Emergency contact','tel',''),sameLogin=el('input',{type:'checkbox',checked:true});
+    enxModalForm('Create Student Account',[
+      {...first,key:'firstName'},{...middle,key:'middleName'},{...last,key:'lastName'},{...adm,key:'admissionNumber'},
+      {...email,key:'email'},{...password,key:'password'},{...phone,key:'phone'},{...gender,key:'gender'},{...dob,key:'dob'},
+      {...address,key:'address'},{...admissionDate,key:'admissionDate'},{...cl,key:'classId'},{...status,key:'academicStatus'},
+      {...guardian,key:'guardianName'},{...guardianPhone,key:'guardianPhone'},{...guardianEmail,key:'guardianEmail'},
+      {...emergency,key:'emergencyContact'},
+      {key:'parentUsesStudentLogin',input:sameLogin,wrap:el('div',{class:'field'},[el('label',{},[sameLogin,document.createTextNode(' Allow parent/guardian to use the student account code + password')])])}
+    ],'Create Account',async d=>{
+      if(!d.firstName||!d.lastName||!d.admissionNumber||!d.email)throw new Error('First name, last name, admission number and email are required');
+      validateChosenPassword(d.password);
+      const emailNorm=d.email.trim().toLowerCase(), admNorm=d.admissionNumber.trim();
+      const dupe=await getDocs(query(col('students'),where('schoolId','==',_school()),where('admissionNumber','==',admNorm),limit(2)));
+      if(!dupe.empty)throw new Error('Admission number already exists');
+      const existing=await getDocs(query(col('users'),where('schoolId','==',_school()),where('email','==',emailNorm),limit(1)));
+      if(!existing.empty)throw new Error('A user with this email already exists in this school.');
+      let createdCode='';
+      const u=await createManagedAccount(emailNorm,d.password,async user=>{
+        createdCode=accountCode('STU',user.uid); const c=classes.find(x=>x.id===d.classId);
+        await setDoc(doc(db,'students',user.uid),{uid:user.uid,schoolId:_school(),studentCode:createdCode,accountCode:createdCode,firstName:d.firstName,middleName:d.middleName,lastName:d.lastName,admissionNumber:admNorm,email:emailNorm,phone:d.phone,gender:d.gender,dob:d.dob||null,address:d.address,admissionDate:d.admissionDate||null,classId:d.classId||null,className:c?ENX.labelClass(c):null,academicStatus:d.academicStatus,status:d.academicStatus,guardianName:d.guardianName,guardianPhone:d.guardianPhone,guardianEmail:d.guardianEmail,emergencyContact:d.emergencyContact,parentUsesStudentLogin:!!d.parentUsesStudentLogin,active:d.academicStatus==='active',accountStatus:'active',createdAt:serverTimestamp(),createdBy:State.user.uid});
+        await setDoc(doc(db,'users',user.uid),{uid:user.uid,schoolId:_school(),accountCode:createdCode,role:'student',active:true,email:emailNorm,displayName:`${d.firstName} ${d.lastName}`,classId:d.classId||null,createdAt:serverTimestamp(),createdBy:State.user.uid});
+        await setDoc(doc(db,'schoolUsers',`${_school()}_${user.uid}`),{uid:user.uid,schoolId:_school(),accountCode:createdCode,role:'student',status:'active',email:emailNorm,createdAt:serverTimestamp(),createdBy:State.user.uid});
+        await ensureLoginAlias(createdCode,emailNorm,'student',_school());
+        if(d.classId)await setDoc(doc(db,'studentClassAssignments',`${_school()}_${user.uid}_${d.classId}`),{schoolId:_school(),studentId:user.uid,classId:d.classId,className:c?ENX.labelClass(c):'',approved:true,assignedAt:serverTimestamp(),assignedBy:State.user.uid},{merge:true});
+      });
+      await audit('student.created',{schoolId:_school(),targetId:u.uid,metadata:{accountCode:createdCode,parentUsesStudentLogin:!!d.parentUsesStudentLogin}});
+      credentialNotice('Student',`${d.firstName} ${d.lastName}`,emailNorm,d.password,createdCode);
+      navigate('students');
+    });
+  });
+  const rows=students.map(s=>el('tr',{},[
+    el('td',{},ENX.fullName(s)),el('td',{},s.studentCode||s.accountCode||'—'),el('td',{},s.admissionNumber||'—'),el('td',{},s.className||classes.find(c=>c.id===s.classId)?.name||'Unassigned'),el('td',{},s.guardianName||'—'),el('td',{},s.email||'—'),el('td',{},_status(s.active===false?'inactive':'active')),
+    el('td',{},[enxButton('Edit',()=>{const f=enxInput('First name','text',s.firstName||''),m=enxInput('Middle name','text',s.middleName||''),l=enxInput('Last name','text',s.lastName||''),ph=enxInput('Phone','tel',s.phone||''),ad=enxInput('Address','text',s.address||''),g=enxInput('Parent/Guardian name','text',s.guardianName||''),gp=enxInput('Parent/Guardian phone','tel',s.guardianPhone||''),ge=enxInput('Parent/Guardian email','email',s.guardianEmail||'');enxModalForm('Edit Student',[{...f,key:'firstName'},{...m,key:'middleName'},{...l,key:'lastName'},{...ph,key:'phone'},{...ad,key:'address'},{...g,key:'guardianName'},{...gp,key:'guardianPhone'},{...ge,key:'guardianEmail'}],'Save',async d=>{await updateDoc(doc(db,'students',s.id),{firstName:d.firstName,middleName:d.middleName,lastName:d.lastName,phone:d.phone,address:d.address,guardianName:d.guardianName,guardianPhone:d.guardianPhone,guardianEmail:d.guardianEmail,updatedAt:serverTimestamp()});await updateDoc(doc(db,'users',s.uid||s.id),{displayName:`${d.firstName} ${d.lastName}`,updatedAt:serverTimestamp()});await audit('student.updated',{schoolId:_school(),targetId:s.id});toast('Student updated');navigate('students');});},'btn sm secondary'),enxButton(s.active===false?'Activate':'Deactivate',async()=>{const active=s.active===false;await updateDoc(doc(db,'students',s.id),{active,status:active?'active':'inactive',academicStatus:active?'active':'inactive',updatedAt:serverTimestamp()});if(s.uid)await updateDoc(doc(db,'users',s.uid),{active,updatedAt:serverTimestamp()});if(s.uid)await updateDoc(doc(db,'schoolUsers',`${_school()}_${s.uid}`),{status:active?'active':'inactive'});await audit('student.status.changed',{schoolId:_school(),targetId:s.id});toast(active?'Student activated':'Student deactivated');navigate('students');},'btn sm')])
+  ]));
+  return shell(el('div',{},[enxPage('Students','Student account, parent/guardian access, code login and academic record',[add]),el('div',{class:'card table-wrap'},[rows.length?_table(['Student','Code','Admission','Class','Parent/Guardian','Email','Status','Actions'],rows):enxEmpty('No students yet.','🎓')]) ]));
+};
+
+// Ensure teacher codes are usable for login and repair older records.
+const __teacherViewV15=enxViewTeachersComplete;
+enxViewTeachersComplete=async function(){
+  const out=await __teacherViewV15();
+  try{const ts=await ENX.schoolDocs('teachers');for(const t of ts){if((t.teacherCode||t.accountCode)&&t.email)await ensureLoginAlias(t.teacherCode||t.accountCode,t.email,t.role||'teacher',_school());}}catch(e){console.warn('teacher login alias repair',e)}
+  return out;
+};
+
+// Real parent accounts can be created by a School Admin and linked to one or
+// more students. Their own credentials remain separate from student accounts.
+async function enxViewParentAccounts(){
+  const links=await ENX.schoolDocs('parentLinks');
+  const parents=await ENX.schoolDocs('schoolUsers',[where('role','==','parent')]);
+  const students=await ENX.schoolDocs('students');
+  const add=enxButton('＋ Create Parent Account',()=>{
+    const name=enxInput('Parent full name','text',''),email=enxInput('Parent email','email',''),password=enxInput('Password','password','',{minlength:6}),student=enxSelect('Link to student',students.map(s=>({value:s.id,label:`${ENX.fullName(s)} — ${s.admissionNumber||''}`})));
+    enxModalForm('Create Parent / Guardian Account',[{...name,key:'name'},{...email,key:'email'},{...password,key:'password'},{...student,key:'studentId'}],'Create',async d=>{
+      if(!d.name||!d.email||!d.studentId)throw new Error('Name, email and student are required');validateChosenPassword(d.password);
+      const em=d.email.trim().toLowerCase();let code='';
+      const u=await createManagedAccount(em,d.password,async user=>{
+        code=accountCode('PAR',user.uid);
+        await setDoc(doc(db,'users',user.uid),{uid:user.uid,schoolId:_school(),accountCode:code,role:'parent',active:true,email:em,displayName:d.name,createdAt:serverTimestamp(),createdBy:State.user.uid});
+        await setDoc(doc(db,'schoolUsers',`${_school()}_${user.uid}`),{uid:user.uid,schoolId:_school(),accountCode:code,role:'parent',status:'active',email:em,createdAt:serverTimestamp(),createdBy:State.user.uid});
+        await setDoc(doc(db,'parentLinks',`${_school()}_${user.uid}_${d.studentId}`),{schoolId:_school(),parentUid:user.uid,studentId:d.studentId,studentName:ENX.fullName(students.find(s=>s.id===d.studentId)||{}),className:students.find(s=>s.id===d.studentId)?.className||'',createdAt:serverTimestamp(),createdBy:State.user.uid},{merge:true});
+        await ensureLoginAlias(code,em,'parent',_school());
+      });
+      await audit('parent.created',{schoolId:_school(),targetId:u.uid,metadata:{accountCode:code,studentId:d.studentId}});credentialNotice('Parent',d.name,em,d.password,code);navigate('parentAccounts');
+    });
+  });
+  const rows=parents.map(p=>{const ls=links.filter(l=>l.parentUid===p.uid);return el('tr',{},[el('td',{},p.displayName||p.email||'—'),el('td',{},p.accountCode||'—'),el('td',{},p.email||'—'),el('td',{},ls.map(l=>l.studentName||l.studentId).join(', ')||'—'),el('td',{},_status(p.status||'active'))])});
+  return shell(el('div',{},[enxPage('Parents / Guardians','Create parent accounts and securely link children',[add]),el('div',{class:'card table-wrap'},[rows.length?_table(['Parent','Code','Email','Children','Status'],rows):enxEmpty('No parent accounts yet.','👨‍👩‍👧')]) ]));
+}
+
+// Platform subscription pricing must be academic-year specific and historical
+// payment amounts must never be recalculated from current pricing.
+async function enxViewPlatformSettingsV15(){
+  if(!eduSuper())return scaffoldView('Access denied','Super Admin access is required.');
+  const pricing=(await getDocs(query(col('subscriptionPricing'),orderBy('academicYear','asc'),limit(100)))).docs.map(d=>({id:d.id,...d.data()}));
+  const settingsSnap=await getDoc(doc(db,'platformSettings','main'));const settings=settingsSnap.exists()?settingsSnap.data():{};
+  const bank=enxInput('Bank Name','text',settings.bankName||''),acct=enxInput('Account Name','text',settings.accountName||''),num=enxInput('Account Number','text',settings.accountNumber||''),instructions=enxTextarea('Payment Instructions',settings.paymentInstructions||'');
+  const add=enxButton('＋ Add Academic-Year Price',()=>{const year=enxInput('Academic Year','text',''),amount=enxInput('Subscription Price (NGN)','number','');enxModalForm('Add Subscription Pricing',[{...year,key:'academicYear'},{...amount,key:'amount'}],'Save',async d=>{if(!d.academicYear||ENX.num(d.amount)<=0)throw new Error('Academic year and positive price are required');await setDoc(doc(db,'subscriptionPricing',d.academicYear),{academicYear:d.academicYear,amount:ENX.num(d.amount),active:true,createdAt:serverTimestamp(),createdBy:State.user.uid},{merge:true});await audit('subscription.pricing.changed',{targetId:d.academicYear,metadata:{amount:ENX.num(d.amount)}});toast('Pricing saved');navigate('superAdminSettings');});});
+  const priceRows=pricing.map(p=>el('tr',{},[el('td',{},p.academicYear),el('td',{},enxMoney(p.amount)),el('td',{},_status(p.active===false?'inactive':'active')),el('td',{},[enxButton('Edit',()=>{const amount=enxInput('Price (NGN)','number',String(p.amount||0));enxModalForm('Edit '+p.academicYear,[{...amount,key:'amount'}],'Save',async d=>{await updateDoc(doc(db,'subscriptionPricing',p.id),{amount:ENX.num(d.amount),updatedAt:serverTimestamp(),updatedBy:State.user.uid});await audit('subscription.pricing.changed',{targetId:p.id,metadata:{amount:ENX.num(d.amount)}});navigate('superAdminSettings');});},'btn sm secondary'),enxButton(p.active===false?'Activate':'Deactivate',async()=>{await updateDoc(doc(db,'subscriptionPricing',p.id),{active:p.active===false,updatedAt:serverTimestamp()});navigate('superAdminSettings');},'btn sm')])]));
+  const save=enxButton('Save Payment Settings',async()=>{await setDoc(doc(db,'platformSettings','main'),{bankName:bank.input.value,accountName:acct.input.value,accountNumber:num.input.value,paymentInstructions:instructions.input.value,updatedAt:serverTimestamp(),updatedBy:State.user.uid},{merge:true});await audit('payment.settings.changed',{targetId:'main'});toast('Payment settings saved');});
+  return shell(el('div',{},[enxPage('Platform Settings','Subscription pricing and manual payment instructions'),el('div',{class:'card table-wrap'},[el('h3',{},'Academic-Year Subscription Pricing'),add,priceRows.length?_table(['Academic Year','Price','Status','Actions'],priceRows):enxEmpty('No academic-year pricing configured.','💰')]),el('div',{class:'card grid grid-2',style:'margin-top:14px'},[bank.wrap,acct.wrap,num.wrap,instructions.wrap,save])]));
+}
+
+async function enxViewSubscriptionV15(){
+  const s=State.activeSchool||{};const years=(await getDocs(query(col('subscriptionPricing'),where('active','==',true),limit(50)))).docs.map(d=>({id:d.id,...d.data()}));
+  const current=years.find(x=>x.academicYear===s.currentAcademicYear)||years[0];
+  const payments=(await getDocs(query(col('payments'),where('schoolId','==',_school()),limit(200)))).docs.map(d=>({id:d.id,...d.data()})).filter(p=>p.paymentType==='subscription');
+  const year=enxSelect('Academic Year',years.map(x=>({value:x.academicYear,label:x.academicYear})),current?.academicYear||'');
+  const amount=enxInput('Amount','number',current?.amount||0),date=enxInput('Payment Date','date',new Date().toISOString().slice(0,10)),ref=enxInput('Transaction / Reference','text',''),method=enxSelect('Payment Method',[{value:'Bank Transfer',label:'Bank Transfer'},{value:'Cash',label:'Cash'},{value:'POS',label:'POS'},{value:'Other',label:'Other'}]),note=enxTextarea('Notes','');
+  year.input.onchange=()=>{const p=years.find(x=>x.academicYear===year.input.value);amount.input.value=p?.amount||0;};
+  const submit=enxButton('Submit Subscription Payment',async()=>{if(ENX.num(amount.input.value)<=0)throw new Error('Select an academic year with configured pricing.');await addDoc(col('payments'),{schoolId:_school(),paymentType:'subscription',academicYear:year.input.value,amount:ENX.num(amount.input.value),paymentDate:date.input.value,paymentMethod:method.input.value,transactionReference:ref.input.value,notes:note.input.value,status:'pending',submittedBy:State.user.uid,submittedAt:serverTimestamp()});await audit('subscription.payment.submitted',{schoolId:_school(),metadata:{academicYear:year.input.value,amount:ENX.num(amount.input.value)}});toast('Subscription payment submitted for verification');navigate('subscription');});
+  const rows=payments.map(p=>el('tr',{},[el('td',{},p.academicYear||'—'),el('td',{},enxMoney(p.amount)),el('td',{},p.paymentDate||fmtDate(p.createdAt)),el('td',{},p.transactionReference||p.reference||'—'),el('td',{},_status(p.status||'pending'))]));
+  return shell(el('div',{},[enxPage('Billing / Subscription','School subscription is separate from student fees'),el('div',{class:'grid grid-3'},[['Status',s.subscriptionStatus||'pending'],['Current Academic Year',s.currentAcademicYear||current?.academicYear||'—'],['Expiry',fmtDate(s.subscriptionExpiresAt)]].map(x=>el('div',{class:'card stat'},[el('div',{class:'num',style:'font-size:18px'},String(x[1])),el('div',{class:'lbl'},x[0])]))),el('div',{class:'card grid grid-2'},[year.wrap,amount.wrap,date.wrap,method.wrap,ref.wrap,note.wrap,submit]),el('div',{class:'card table-wrap',style:'margin-top:14px'},[el('h3',{},'Payment History'),rows.length?_table(['Academic Year','Amount','Date','Reference','Status'],rows):enxEmpty('No subscription payments yet.','💳')])]));
+}
+
+// Add parent account management to school navigation.
+const __navV15=navItemsForRole;
+navItemsForRole=function(){
+  const m=__navV15();const r=effectiveRole();
+  if(['schoolAdmin','owner','principal'].includes(r)){
+    const i=m.findIndex(x=>x[0]==='students');if(i>=0)m.splice(i+1,0,['parentAccounts','👨‍👩‍👧','Parents / Guardians']);
+  }
+  if(r==='parent')m.splice(1,0,['parentChild','👨‍👩‍👧','Child Information']);
+  return m;
+};
+
+routes.parentAccounts=enxViewParentAccounts;
+routes.parentChild=enxViewParentChild;
+routes.superAdminSettings=enxViewPlatformSettingsV15;
+routes.subscription=enxViewSubscriptionV15;
+
+// Keep student dashboard and parent/guardian dashboard accessible after login.
+const __studentDashboardV15=enxViewStudentDashboard;
+// No replacement needed; route remains the real implementation.
+
+// The v15 overrides are declared after the original boot code; refresh the current view
+// so the new login UI and routes are actually used immediately.
+if(State.route==='login' || State.route==='loading') setTimeout(()=>render(),0);
+
+
+// Super Admin payment verification is restricted to EduNexa subscription payments.
+async function enxViewPlatformPaymentsV15(){
+  if(!eduSuper())return scaffoldView('Access denied','Super Admin access is required.');
+  const payments=(await getDocs(query(col('payments'),where('paymentType','==','subscription'),limit(300)))).docs.map(d=>({id:d.id,...d.data()}));
+  const schools=(await getDocs(query(col('schools'),limit(300)))).docs.map(d=>({id:d.id,...d.data()}));
+  const rows=payments.map(p=>el('tr',{},[
+    el('td',{},schools.find(s=>s.id===p.schoolId)?.name||p.schoolId||'—'),
+    el('td',{},p.academicYear||'—'),el('td',{},enxMoney(p.amount)),el('td',{},p.paymentDate||fmtDate(p.createdAt)),
+    el('td',{},p.paymentMethod||p.method||'—'),el('td',{},p.transactionReference||p.reference||'—'),el('td',{},_status(p.status||'pending')),
+    el('td',{},p.status==='pending'?[enxButton('Approve',async()=>{
+      const expires=new Date();expires.setFullYear(expires.getFullYear()+1);
+      await updateDoc(doc(db,'payments',p.id),{status:'approved',verified:true,approvedBy:State.user.uid,approvedAt:serverTimestamp(),historicalAmount:ENX.num(p.amount)});
+      await updateDoc(doc(db,'schools',p.schoolId),{subscriptionStatus:'active',currentAcademicYear:p.academicYear||null,subscriptionExpiresAt:Timestamp.fromDate(expires),updatedAt:serverTimestamp()});
+      await audit('subscription.payment.approved',{schoolId:p.schoolId,targetId:p.id,metadata:{academicYear:p.academicYear,amount:p.amount}});
+      toast('Subscription payment approved and subscription activated.');navigate('superAdminPayments');
+    },'btn sm'),enxButton('Reject',async()=>{const reason=prompt('Reason for rejection (required)')||'';if(!reason.trim())return;await updateDoc(doc(db,'payments',p.id),{status:'rejected',rejectionReason:reason,rejectedBy:State.user.uid,rejectedAt:serverTimestamp()});await audit('subscription.payment.rejected',{schoolId:p.schoolId,targetId:p.id,metadata:{reason}});toast('Payment rejected.');navigate('superAdminPayments');},'btn sm danger')]:null)
+  ]));
+  return shell(el('div',{},[enxPage('Subscription Payment Verification','Only EduNexa platform subscription payments appear here.'),el('div',{class:'card table-wrap'},[rows.length?_table(['School','Academic Year','Amount','Date','Method','Reference','Status','Actions'],rows):enxEmpty('No subscription payments found.','💳')])]));
+}
+routes.superAdminPayments=enxViewPlatformPaymentsV15;
+
+async function enxRepairSchoolLoginAliases(){
+  if(!eduSchoolAdmin())return;
+  try{
+    const [students,teachers]=await Promise.all([ENX.schoolDocs('students',[],500),ENX.schoolDocs('teachers',[],500)]);
+    for(const x of [...students.map(v=>({...v,__role:'student',__code:v.studentCode||v.accountCode})),...teachers.map(v=>({...v,__role:v.role||'teacher',__code:v.teacherCode||v.accountCode}))]){
+      if(x.__code&&x.email) await ensureLoginAlias(x.__code,x.email,x.__role,_school());
+    }
+  }catch(e){console.warn('login alias repair',e)}
+}
+const __oldOwnerDashV15=enxViewOwnerDashboard;
+enxViewOwnerDashboard=async function(){await enxRepairSchoolLoginAliases();return __oldOwnerDashV15();};
+routes.ownerDashboard=enxViewOwnerDashboard;
+
+// Real registrar and report-printer dashboards instead of placeholder screens.
+async function enxViewRegistrarDashboardV15(){
+  const [students,classes,assignments]=await Promise.all([ENX.schoolDocs('students'),ENX.schoolDocs('classes'),ENX.schoolDocs('studentClassAssignments')]);
+  return shell(el('div',{},[
+    enxPage('Registrar Dashboard','Admissions, student records and class assignments'),
+    el('div',{class:'grid grid-3'},[['Students',students.length],['Classes',classes.length],['Class Assignments',assignments.length]].map(x=>el('div',{class:'card stat'},[el('div',{class:'num'},String(x[1])),el('div',{class:'lbl'},x[0])]))),
+    el('div',{class:'card'},[el('h3',{},'Quick actions'),el('div',{style:'display:flex;gap:8px;flex-wrap:wrap'},[enxButton('Students',()=>navigate('students')),enxButton('Classes',()=>navigate('classes'),'btn secondary'),enxButton('Assignments',()=>navigate('classAssignments'),'btn secondary'),enxButton('CSV Import',()=>navigate('csvImport'),'btn secondary')])])
+  ]));
+}
+async function enxViewPrinterDashboardV15(){
+  const results=await ENX.schoolDocs('results');
+  const ready=results.filter(r=>['published','locked','approved'].includes(r.status)).length;
+  return shell(el('div',{},[
+    enxPage('Report Printer Dashboard','Published academic reports ready for printing'),
+    el('div',{class:'grid grid-2'},[['Reports Ready',ready],['Print Status','Ready']].map(x=>el('div',{class:'card stat'},[el('div',{class:'num'},String(x[1])),el('div',{class:'lbl'},x[0])]))),
+    el('div',{class:'card'},[enxButton('Open Reports',()=>navigate('reports'))])
+  ]));
+}
+routes.registrarDashboard=enxViewRegistrarDashboardV15;
+routes.printerDashboard=enxViewPrinterDashboardV15;
+
+async function enxViewStudentDetailV15(params={}){
+  const id=params.id||State.routeParams?.id;
+  if(!id)return enxEmpty('Student ID is required.','🎓');
+  const st=await getDoc(doc(db,'students',id));if(!st.exists())return enxEmpty('Student not found.','🎓');
+  const s={id,...st.data()};
+  const [results,attendance,payments]=await Promise.all([
+    ENX.schoolDocs('results',[where('studentId','==',id)]),ENX.schoolDocs('attendance',[where('studentId','==',id)]),ENX.schoolDocs('payments',[where('studentId','==',id)])
+  ]);
+  return shell(el('div',{},[
+    enxPage(ENX.fullName(s),'Student profile and academic record',[enxButton('Back',()=>navigate('students'),'btn secondary')]),
+    el('div',{class:'grid grid-4'},[['Admission',s.admissionNumber||'—'],['Class',s.className||'—'],['Results',results.length],['Attendance',attendance.length]].map(x=>el('div',{class:'card stat'},[el('div',{class:'num',style:'font-size:18px'},String(x[1])),el('div',{class:'lbl'},x[0])]))),
+    el('div',{class:'grid grid-2'},[
+      el('div',{class:'card'},[el('h3',{},'Personal Information'),el('p',{},`Name: ${ENX.fullName(s)}`),el('p',{},`Gender: ${s.gender||'—'}`),el('p',{},`Date of birth: ${s.dob||'—'}`),el('p',{},`Phone: ${s.phone||'—'}`),el('p',{},`Email: ${s.email||'—'}`),el('p',{},`Address: ${s.address||'—'}`)]),
+      el('div',{class:'card'},[el('h3',{},'Parent / Guardian'),el('p',{},s.guardianName||'—'),el('p',{},s.guardianPhone||'—'),el('p',{},s.guardianEmail||'—')])
+    ]),
+    el('div',{class:'card table-wrap'},[_table(['Subject','Term','Total','Grade','Status'],results.map(r=>el('tr',{},[el('td',{},r.subjectName||r.subjectId||'—'),el('td',{},r.term||'—'),el('td',{},String(r.total??0)),el('td',{},r.grade||'—'),el('td',{},_status(r.status||'—'))])))])
+  ]));
+}
+routes.studentDetail=enxViewStudentDetailV15;
+
+function enxSubscriptionDisplayStatus(s){
+  if(!s?.subscriptionExpiresAt)return s?.subscriptionStatus||'pending';
+  const d=s.subscriptionExpiresAt.toDate?s.subscriptionExpiresAt.toDate():new Date(s.subscriptionExpiresAt);
+  const days=Math.ceil((d.getTime()-Date.now())/86400000);
+  if(days<0)return 'expired'; if(days<=30)return 'expiring'; return s.subscriptionStatus||'active';
+}
+
+// Result approval workflow with the final lock step required before report-card finalization.
+async function enxViewReviewResultsV15(){
+  const [results,students,subjects,classes]=await Promise.all([ENX.schoolDocs('results'),ENX.schoolDocs('students'),ENX.schoolDocs('subjects'),ENX.schoolDocs('classes')]);
+  const rows=results.filter(r=>['submitted','approved','published','locked','rejected'].includes(r.status)).map(r=>el('tr',{},[
+    el('td',{},ENX.fullName(students.find(s=>s.id===r.studentId)||{name:r.studentId})),
+    el('td',{},subjects.find(s=>s.id===r.subjectId)?.name||r.subjectName||r.subjectId||'—'),
+    el('td',{},classes.find(c=>c.id===r.classId)?.name||r.classId||'—'),
+    el('td',{},String(r.total??0)),el('td',{},r.grade||enxGrade(r.total).letter),el('td',{},_status(r.status)),
+    el('td',{},[
+      r.status==='submitted'?enxButton('Approve',async()=>{await updateDoc(doc(db,'results',r.id),{status:'approved',reviewedBy:State.user.uid,reviewedAt:serverTimestamp()});await audit('results.approved',{schoolId:_school(),targetId:r.id});navigate('reviewResults');},'btn sm'):null,
+      r.status==='submitted'?enxButton('Reject',async()=>{const reason=prompt('Reason for rejection (required)')||'';if(!reason.trim())return;await updateDoc(doc(db,'results',r.id),{status:'rejected',rejectionReason:reason,reviewedBy:State.user.uid,reviewedAt:serverTimestamp()});await audit('results.rejected',{schoolId:_school(),targetId:r.id,metadata:{reason}});navigate('reviewResults');},'btn sm danger'):null,
+      r.status==='approved'?enxButton('Publish',async()=>{await updateDoc(doc(db,'results',r.id),{status:'published',publishedBy:State.user.uid,publishedAt:serverTimestamp()});await audit('results.published',{schoolId:_school(),targetId:r.id});navigate('reviewResults');},'btn sm secondary'):null,
+      ['approved','published'].includes(r.status)?enxButton('Lock',async()=>{await updateDoc(doc(db,'results',r.id),{status:'locked',lockedBy:State.user.uid,lockedAt:serverTimestamp()});await audit('results.locked',{schoolId:_school(),targetId:r.id});navigate('reviewResults');},'btn sm'):null
+    ])
+  ]));
+  return shell(el('div',{},[enxPage('Result Approvals','Submitted → Approved → Published → Locked'),el('div',{class:'card table-wrap'},[rows.length?_table(['Student','Subject','Class','Total','Grade','Status','Actions'],rows):enxEmpty('No result records found.','📊')])]));
+}
+routes.reviewResults=enxViewReviewResultsV15;
 </script>
+
 </body>
 </html>
