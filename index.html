@@ -2673,7 +2673,7 @@ viewLogin=function(){
     el('div',{style:'display:flex;justify-content:space-between;margin-top:12px'},[
       forgot,el('a',{style:'font-size:12px;cursor:pointer',onclick:()=>navigate('registerSchool')},'Register your school')
     ]),
-    el('div',{style:'margin-top:14px;padding:12px;border:1px solid var(--border);border-radius:12px;font-size:12px;color:var(--muted)'},'For a student account, the same student code and password can open either the student dashboard or the Parent / Guardian view after successful sign-in.')
+    el('div',{style:'margin-top:14px;padding:12px;border:1px solid var(--border);border-radius:12px;font-size:12px;color:var(--muted)'},[el('strong',{},'Parent / Guardian login'),el('p',{style:'margin:6px 0 0'},'Use the exact student EduNexa Account Code and password given by the School Admin. If Parent / Guardian access was enabled for that student, the same credentials can open the parent view. A separately created parent account uses its own PAR-XXXXXXXX code and password.')])
   );
   wrap.appendChild(card);return wrap;
 };
@@ -2693,6 +2693,10 @@ routes.studentAccessChoice=async function(){
   const student=await getDoc(doc(db,'students',State.user.uid));
   const d=student.exists()?student.data():{};
   const choose=(guardian)=>{
+    if(guardian && d.parentUsesStudentLogin!==true){
+      toast('Parent / Guardian access has not been enabled for this student account. Ask the School Admin to enable it.','bad');
+      return;
+    }
     State.studentAccessChosen=true;
     State.loginAsGuardian=guardian;
     navigate(guardian?'parentDashboard':'studentDashboard');
@@ -2843,10 +2847,13 @@ async function enxViewParentAccounts(){
       const em=d.email.trim().toLowerCase();let code='';
       const u=await createManagedAccount(em,d.password,async user=>{
         code=accountCode('PAR',user.uid);
-        await setDoc(doc(db,'users',user.uid),{uid:user.uid,schoolId:_school(),accountCode:code,role:'parent',active:true,email:em,displayName:d.name,createdAt:serverTimestamp(),createdBy:State.user.uid});
-        await setDoc(doc(db,'schoolUsers',`${_school()}_${user.uid}`),{uid:user.uid,schoolId:_school(),accountCode:code,role:'parent',status:'active',email:em,createdAt:serverTimestamp(),createdBy:State.user.uid});
-        await setDoc(doc(db,'parentLinks',`${_school()}_${user.uid}_${d.studentId}`),{schoolId:_school(),parentUid:user.uid,studentId:d.studentId,studentName:ENX.fullName(students.find(s=>s.id===d.studentId)||{}),className:students.find(s=>s.id===d.studentId)?.className||'',createdAt:serverTimestamp(),createdBy:State.user.uid},{merge:true});
-        await ensureLoginAlias(code,em,'parent',_school());
+        const sid=_school(), child=students.find(s=>s.id===d.studentId)||{};
+        const batch=writeBatch(db);
+        batch.set(doc(db,'users',user.uid),{uid:user.uid,schoolId:sid,accountCode:code,role:'parent',active:true,email:em,displayName:d.name,createdAt:serverTimestamp(),createdBy:State.user.uid});
+        batch.set(doc(db,'schoolUsers',`${sid}_${user.uid}`),{uid:user.uid,schoolId:sid,accountCode:code,role:'parent',status:'active',email:em,createdAt:serverTimestamp(),createdBy:State.user.uid});
+        batch.set(doc(db,'parentLinks',`${sid}_${user.uid}_${d.studentId}`),{schoolId:sid,parentUid:user.uid,studentId:d.studentId,studentName:ENX.fullName(child),className:child.className||'',createdAt:serverTimestamp(),createdBy:State.user.uid},{merge:true});
+        batch.set(doc(db,'loginAliases',code),{authEmail:em,role:'parent',schoolId:sid,active:true,updatedAt:serverTimestamp()},{merge:true});
+        await batch.commit();
       });
       await audit('parent.created',{schoolId:_school(),targetId:u.uid,metadata:{accountCode:code,studentId:d.studentId}});credentialNotice('Parent',d.name,em,d.password,code);navigate('parentAccounts');
     });
@@ -2891,8 +2898,18 @@ navItemsForRole=function(){
   return m;
 };
 
+// Parent/Guardian view for a student account using the exact student credentials.
+// This is read-only and only allowed when the School Admin enabled parentUsesStudentLogin.
+async function enxViewStudentGuardian(){
+  if(effectiveRole()!=='student' || State.loginAsGuardian!==true) return enxViewParentDashboard();
+  const snap=await getDoc(doc(db,'students',State.user.uid));
+  if(!snap.exists() || snap.data().parentUsesStudentLogin!==true) return shell(el('div',{class:'card'},[el('h2',{},'Parent / Guardian access unavailable'),el('p',{},'This student account has not been enabled for Parent / Guardian access.'),enxButton('Back to Student Dashboard',()=>navigate('studentDashboard'))]));
+  const s={id:snap.id,...snap.data()};
+  return shell(el('div',{},[enxPage('Parent / Guardian View','Using the same student account code and password',[enxButton('Student Dashboard',()=>{State.loginAsGuardian=false;State.studentAccessChosen=true;navigate('studentDashboard')},'btn secondary')]),el('div',{class:'grid grid-3'},[['Student',ENX.fullName(s)],['Admission Number',s.admissionNumber||'—'],['Class',s.className||'Unassigned']].map(x=>el('div',{class:'card stat'},[el('div',{class:'num',style:'font-size:18px'},String(x[1])),el('div',{class:'lbl'},x[0])]))),el('div',{class:'card'},[el('h3',{},'Guardian / Parent Information'),el('p',{},`Name: ${s.guardianName||'—'}`),el('p',{},`Phone: ${s.guardianPhone||'—'}`),el('p',{},`Email: ${s.guardianEmail||'—'}`)]),el('div',{class:'card'},[el('p',{},'Use the navigation to view the academic information available to this student account. The account remains read-only in Parent / Guardian mode.')]) ]));
+}
 routes.parentAccounts=enxViewParentAccounts;
 routes.parentChild=enxViewParentChild;
+routes.parentDashboard=enxViewParentDashboard;
 routes.superAdminSettings=enxViewPlatformSettingsV15;
 routes.subscription=enxViewSubscriptionV15;
 
@@ -3005,6 +3022,13 @@ async function enxViewReviewResultsV15(){
   return shell(el('div',{},[enxPage('Result Approvals','Submitted → Approved → Published → Locked'),el('div',{class:'card table-wrap'},[rows.length?_table(['Student','Subject','Class','Total','Grade','Status','Actions'],rows):enxEmpty('No result records found.','📊')])]));
 }
 routes.reviewResults=enxViewReviewResultsV15;
+
+// Final parent/student access routing hardening.
+const __parentDashboardReal=enxViewParentDashboard;
+routes.parentDashboard=async function(){
+  if(effectiveRole()==='student' && State.loginAsGuardian===true) return enxViewStudentGuardian();
+  return __parentDashboardReal();
+};
 </script>
 
 </body>
