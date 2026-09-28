@@ -656,7 +656,7 @@ setTimeout(()=>{
   }
 },3500);
 
-async function doLogin(email, password, btn){
+async function doLoginLegacy(email, password, btn){
   btn.disabled = true;
   try{ await signInWithEmailAndPassword(auth, email, password); }
   catch(e){ toast(authErrorMessage(e)); btn.disabled=false; }
@@ -720,7 +720,6 @@ function viewLogin(){
       el("a",{style:"font-size:12px;cursor:pointer", onclick:()=>navigate("registerSchool")},"Register your school")
     ]),
     el("div",{style:"text-align:center;margin-top:14px;padding-top:14px;border-top:1px solid var(--border)"},[
-      el("a",{style:"font-size:12px;cursor:pointer;font-weight:700", onclick:()=>navigate("redeemInvite")},"Have a school code + invite code? Join as Teacher/Parent →")
     ])
   );
   wrap.appendChild(card);
@@ -1993,9 +1992,15 @@ function eduSuper(){ return effectiveRole()==='superAdmin'; }
 function eduField(label,value,type='text'){ const i=el('input',{type,value:value??''}); return [el('label',{},label),i]; }
 function eduCard(title,body){ return el('div',{class:'card'},[el('h3',{},title),body]); }
 function eduDownloadButton(){
-  const b=el('button',{class:'btn secondary',id:'edu-install-btn',style:'display:none'},'⬇ Install EduNexa');
-  b.onclick=()=>{ if(window.__eduInstallPrompt){window.__eduInstallPrompt.prompt();window.__eduInstallPrompt.userChoice.finally(()=>{window.__eduInstallPrompt=null;b.style.display='none';});} else toast('Use your browser menu and choose Install app / Add to Home screen.'); };
-  setTimeout(()=>{ if(window.__eduCanInstall) b.style.display='inline-flex'; },0); return b;
+  const b=el('button',{class:'btn secondary',id:'edu-install-btn',style:'display:inline-flex'},'⬇ Install EduNexa App');
+  b.onclick=async()=>{
+    if(window.__eduInstallPrompt){
+      try{ await window.__eduInstallPrompt.prompt(); await window.__eduInstallPrompt.userChoice; }catch(e){}
+      window.__eduInstallPrompt=null; window.__eduCanInstall=false; b.style.display='none'; return;
+    }
+    toast('If no install prompt appears, open your browser menu and choose “Install app” or “Add to Home screen”.');
+  };
+  return b;
 }
 async function eduEditDoc(collectionName,id,fields,title){
   const body=el('div'); const inputs={};
@@ -2071,7 +2076,7 @@ window.addEventListener('appinstalled',()=>{window.__eduInstallPrompt=null;windo
 
 // Make the login page visibly offer installation even before authentication.
 const _eduViewLogin=viewLogin;
-viewLogin=function(){const v=_eduViewLogin();const card=v.querySelector('.card');if(card){const b=el('button',{class:'btn secondary',style:'width:100%;margin-top:10px',onclick:()=>navigate('downloadApp')},'⬇ Install / Download EduNexa App');card.appendChild(b);}return v;};
+viewLogin=function(){const v=_eduViewLogin();const card=v.querySelector('.card');if(card){const b=eduDownloadButton();b.style.width='100%';b.style.marginTop='10px';card.appendChild(b);}return v;};
 routes.login=viewLogin;
 window.EduNexa={version:'8.1-management-pwa',name:'EduNexa'};
 
@@ -2621,59 +2626,85 @@ async function ensureLoginAlias(code, email, role, schoolId){
     schoolId:schoolId||null, active:true, updatedAt:serverTimestamp()
   },{merge:true});
 }
+const __baseDoLoginV15=doLogin;
+function normalizeAccountCode(value){ return String(value||'').toUpperCase().replace(/\s+/g,'').trim(); }
 async function resolveLoginIdentifier(identifier){
   const raw=String(identifier||'').trim();
-  if(!raw) throw new Error('Enter your email address or EduNexa account code.');
-  if(raw.includes('@')) return raw.toLowerCase();
-  // Account codes are intentionally forgiving about spaces/case, so users can
-  // enter STU-ABC123, stu-abc123, or STU - ABC123 and still reach the same alias.
-  const code=raw.toUpperCase().replace(/\s+/g,'');
+  if(!raw) throw new Error('Enter your EduNexa Account Code or email address.');
+  if(raw.includes('@')) return {email:raw.toLowerCase(), schoolId:null, role:null};
+  const code=normalizeAccountCode(raw);
   const snap=await getDoc(doc(db,'loginAliases',code));
-  if(!snap.exists() || snap.data().active===false) throw new Error('Account code not found or inactive. Check the code exactly as shown on the credentials card.');
+  if(!snap.exists() || snap.data().active===false) throw new Error('EduNexa Account Code not found or inactive. Use the exact code shown on the credentials card.');
   const d=snap.data();
-  if(!d.authEmail) throw new Error('This account code is not configured correctly. Ask the school administrator to repair the login code.');
-  return String(d.authEmail).trim().toLowerCase();
+  if(!d.authEmail) throw new Error('This account code is not configured correctly. Ask the School Admin to regenerate/repair the login credentials.');
+  return {email:String(d.authEmail).trim().toLowerCase(),schoolId:d.schoolId||null,role:d.role||null,code};
+}
+function normalizeSchoolCode(value){ return String(value||'').toUpperCase().replace(/\s+/g,'').trim(); }
+async function doLogin(identifier, schoolCode, password, btn){
+  btn.disabled=true;
+  State.loginAsGuardian=false; State.loginIntent='auto'; State.studentAccessChosen=false;
+  let resolved=null;
+  try{
+    if(!password) throw new Error('Enter your password.');
+    resolved=await resolveLoginIdentifier(identifier);
+    if(!resolved.schoolId && !resolved.email) throw new Error('Account credentials are incomplete.');
+    await signInWithEmailAndPassword(auth,resolved.email,password);
+    // School Code is an identity check, not a second authentication secret.
+    // It is checked after Firebase Auth succeeds because Firestore intentionally
+    // does not expose school documents to unauthenticated users.
+    const enteredSchool=normalizeSchoolCode(schoolCode);
+    if(enteredSchool){
+      const schoolSnap=await getDoc(doc(db,'schools',resolved.schoolId || '__unknown__'));
+      const actual=schoolSnap.exists()?normalizeSchoolCode(schoolSnap.data().schoolCode):'';
+      if(!actual || actual!==enteredSchool){
+        await signOut(auth);
+        throw new Error('The School Code does not match this account. Use the School Code given by your school and the exact EduNexa Account Code shown on your credentials.');
+      }
+    }
+  }catch(e){
+    try{ if(auth.currentUser && resolved && resolved.schoolId && normalizeSchoolCode(schoolCode)){ /* handled above */ } }catch(_){ }
+    toast(authErrorMessage(e)); btn.disabled=false;
+  }
 }
 
-const __baseDoLoginV15=doLogin;
-doLogin=async function(identifier,password,btn){
-  btn.disabled=true;
-  State.loginAsGuardian=false;
-  State.loginIntent='auto';
-  State.studentAccessChosen=false;
-  try{
-    const email=await resolveLoginIdentifier(identifier);
-    await signInWithEmailAndPassword(auth,email,password);
-  }catch(e){toast(authErrorMessage(e));btn.disabled=false;}
-};
-
-// One login form for everybody. Students can use the exact same code/password
-// for themselves OR choose Parent/Guardian access immediately after sign-in.
+// One clean authentication form for every account type.
+// School Admin creates Student/Teacher/Parent accounts and gives each person:
+//   1) School Code
+//   2) EduNexa Account Code (STU-/TCH-/PAR-...)
+//   3) Password
+// No invitation code is required for normal Student, Teacher or Parent login.
 viewLogin=function(){
   const wrap=el('div',{class:'center-screen'}),card=el('div',{class:'card auth-card'});
-  const identifier=el('input',{type:'text',placeholder:'Email or EduNexa account code',autocomplete:'username',autocapitalize:'none',spellcheck:'false'});
+  const school=el('input',{type:'text',placeholder:'School Code (e.g. ENX-7K2M9P)',autocomplete:'organization',autocapitalize:'characters',spellcheck:'false'});
+  const identifier=el('input',{type:'text',placeholder:'EduNexa Account Code or Email',autocomplete:'username',autocapitalize:'none',spellcheck:'false'});
   const pass=el('input',{type:'password',placeholder:'Password',autocomplete:'current-password'});
   const btn=el('button',{class:'btn',style:'width:100%;margin-top:6px'},'Sign In');
-  btn.onclick=()=>doLogin(identifier.value.trim(),pass.value,btn);
-  pass.addEventListener('keydown',e=>{if(e.key==='Enter')btn.click();});
+  btn.onclick=()=>doLogin(identifier.value.trim(),school.value.trim(),pass.value,btn);
+  [school,identifier,pass].forEach(i=>i.addEventListener('keydown',e=>{if(e.key==='Enter')btn.click();}));
   const forgot=el('a',{style:'font-size:12px;cursor:pointer'},'Forgot password?');
   forgot.onclick=async()=>{
-    if(!identifier.value)return toast('Enter your email address or account code first.');
-    try{const email=await resolveLoginIdentifier(identifier.value);await sendPasswordResetEmail(auth,email);toast('Password reset email sent.');}
+    if(!identifier.value)return toast('Enter your EduNexa Account Code or email first.');
+    try{const resolved=await resolveLoginIdentifier(identifier.value);await sendPasswordResetEmail(auth,resolved.email);toast('Password reset email sent.');}
     catch(e){toast(authErrorMessage(e));}
   };
   card.append(
     el('div',{style:'text-align:center;margin-bottom:18px'},[
       el('div',{class:'topbar brand',style:'font-size:24px;justify-content:center;border:none;padding:0'},'EduNexa'),
       el('p',{},TAGLINE),
-      el('p',{style:'font-size:12px;color:var(--muted);margin-top:8px'},'Students, teachers and parents can use their EduNexa account code or email with the same password field.')
+      el('p',{style:'font-size:12px;color:var(--muted);margin-top:8px'},'Simple login for Students, Teachers and Parents / Guardians.')
     ]),
-    el('div',{class:'field'},[el('label',{},'Email or EduNexa Account Code'),identifier]),
-    el('div',{class:'field'},[el('label',{},'Password'),pass]),btn,
+    el('div',{class:'field'},[el('label',{class:'req'},'School Code'),school]),
+    el('div',{class:'field'},[el('label',{class:'req'},'EduNexa Account Code or Email'),identifier]),
+    el('div',{class:'field'},[el('label',{class:'req'},'Password'),pass]),
+    btn,
     el('div',{style:'display:flex;justify-content:space-between;margin-top:12px'},[
       forgot,el('a',{style:'font-size:12px;cursor:pointer',onclick:()=>navigate('registerSchool')},'Register your school')
     ]),
-    el('div',{style:'margin-top:14px;padding:12px;border:1px solid var(--border);border-radius:12px;font-size:12px;color:var(--muted)'},[el('strong',{},'Parent / Guardian login'),el('p',{style:'margin:6px 0 0'},'Use the exact student EduNexa Account Code and password given by the School Admin. If Parent / Guardian access was enabled for that student, the same credentials can open the parent view. A separately created parent account uses its own PAR-XXXXXXXX code and password.')])
+    el('div',{style:'margin-top:14px;padding:12px;border:1px solid var(--border);border-radius:12px;font-size:12px;color:var(--muted)'},[
+      el('strong',{},'Your login details are not invitation codes'),
+      el('p',{style:'margin:6px 0 0'},'Your School Admin gives you the School Code, your generated EduNexa Account Code (STU-, TCH- or PAR-) and your password. Enter those exact details here. No extra invitation code is required for normal login.'),
+      el('p',{style:'margin:6px 0 0'},'Parent / Guardian access may use the student account code + password when the School Admin enabled that option.')
+    ])
   );
   wrap.appendChild(card);return wrap;
 };
@@ -2852,7 +2883,7 @@ async function enxViewParentAccounts(){
         batch.set(doc(db,'users',user.uid),{uid:user.uid,schoolId:sid,accountCode:code,role:'parent',active:true,email:em,displayName:d.name,createdAt:serverTimestamp(),createdBy:State.user.uid});
         batch.set(doc(db,'schoolUsers',`${sid}_${user.uid}`),{uid:user.uid,schoolId:sid,accountCode:code,role:'parent',status:'active',email:em,createdAt:serverTimestamp(),createdBy:State.user.uid});
         batch.set(doc(db,'parentLinks',`${sid}_${user.uid}_${d.studentId}`),{schoolId:sid,parentUid:user.uid,studentId:d.studentId,studentName:ENX.fullName(child),className:child.className||'',createdAt:serverTimestamp(),createdBy:State.user.uid},{merge:true});
-        batch.set(doc(db,'loginAliases',code),{authEmail:em,role:'parent',schoolId:sid,active:true,updatedAt:serverTimestamp()},{merge:true});
+        batch.set(doc(db,'loginAliases',code),{authEmail:em,role:'parent',schoolId:sid,parentUid:user.uid,active:true,updatedAt:serverTimestamp()},{merge:true});
         await batch.commit();
       });
       await audit('parent.created',{schoolId:_school(),targetId:u.uid,metadata:{accountCode:code,studentId:d.studentId}});credentialNotice('Parent',d.name,em,d.password,code);navigate('parentAccounts');
@@ -3029,6 +3060,228 @@ routes.parentDashboard=async function(){
   if(effectiveRole()==='student' && State.loginAsGuardian===true) return enxViewStudentGuardian();
   return __parentDashboardReal();
 };
+
+
+/* =====================================================================
+   EDUNEXA ULTIMATE PRODUCT PATCH — FINAL USER-APPROVED FEATURE SET
+   Adds optional homework, academic calendar, teaching timetable, exam
+   timetable, digital IDs, school feature controls, and cross-school
+   parent linking. No Firebase Storage is used.
+   ===================================================================== */
+(function(){
+  const U = window.EduNexa || (window.EduNexa={});
+  U.version='ultimate-2026.09.28';
+
+  function Urole(){return effectiveRole();}
+  function Uschool(){return _school();}
+  function Uadmin(){return ['superAdmin','owner','schoolAdmin','principal','vicePrincipal'].includes(Urole());}
+  function Uacademic(){return ['superAdmin','owner','schoolAdmin','principal','vicePrincipal'].includes(Urole());}
+  function Uteacher(){return Urole()==='teacher';}
+  function Ustudent(){return Urole()==='student';}
+  function Uparent(){return Urole()==='parent' || (Urole()==='student' && State.loginAsGuardian===true);}
+  function Udate(v){return v||new Date().toISOString().slice(0,10);}
+  function Utime(v){return v||'08:00';}
+  function Ulabel(v){return String(v||'').trim()||'—';}
+  function UcanFeature(name){
+    if(Urole()==='superAdmin') return true;
+    const f=State.activeSchool && State.activeSchool.features;
+    if(!f || f[name]===undefined) return true;
+    return f[name]!==false;
+  }
+  function UfeatureGuard(name,label){
+    if(UcanFeature(name)) return null;
+    return shell(el('div',{class:'card'},[el('h2',{},label+' is disabled'),el('p',{},'This feature has been disabled for this school by the EduNexa Platform Admin.') ]));
+  }
+
+  async function UstudentsForTeacher(){
+    const assigns=await ENX.schoolDocs('teacherAssignments',[where('teacherUid','==',State.user.uid)]);
+    const ids=new Set(assigns.map(a=>a.classId).filter(Boolean));
+    const students=await ENX.schoolDocs('students');
+    return students.filter(s=>!ids.size || ids.has(s.classId));
+  }
+
+  async function UviewHomework(){
+    const g=UfeatureGuard('homework','Homework'); if(g)return g;
+    if(Uteacher()){
+      const [classes,subjects,homework]=await Promise.all([ENX.schoolDocs('classes'),ENX.schoolDocs('subjects'),ENX.schoolDocs('homework',[where('teacherUid','==',State.user.uid)])]);
+      const add=enxButton('＋ Give Homework',()=>{
+        const title=enxInput('Title','text',''),instructions=enxTextarea('Instructions',''),due=enxInput('Due date','date',Udate()),cl=enxSelect('Class',classes.map(c=>({value:c.id,label:ENX.labelClass(c)}))),sub=enxSelect('Subject',subjects.map(x=>({value:x.id,label:x.name||x.subjectName||x.code}))),allow=enxSelect('Submission',[{value:'yes',label:'Allow submission'},{value:'no',label:'View only'}],'yes');
+        enxModalForm('Give Homework',[{...title,key:'title'},{...instructions,key:'instructions'},{...cl,key:'classId'},{...sub,key:'subjectId'},{...due,key:'dueDate'},{...allow,key:'submission'}],'Publish',async d=>{
+          if(!d.title||!d.classId||!d.subjectId)throw new Error('Title, class and subject are required');
+          await addDoc(col('homework'),{schoolId:Uschool(),title:d.title,instructions:d.instructions,classId:d.classId,subjectId:d.subjectId,dueDate:d.dueDate,allowSubmission:d.submission==='yes',teacherUid:State.user.uid,status:'published',createdAt:serverTimestamp(),createdBy:State.user.uid});
+          await audit('homework.created',{schoolId:Uschool(),metadata:{title:d.title,classId:d.classId,subjectId:d.subjectId}}); toast('Homework published'); navigate('homework');
+        });
+      });
+      const rows=homework.map(h=>el('tr',{},[el('td',{},h.title),el('td',{},classes.find(c=>c.id===h.classId)?.name||h.classId||'—'),el('td',{},subjects.find(x=>x.id===h.subjectId)?.name||h.subjectId||'—'),el('td',{},h.dueDate||'—'),el('td',{},h.allowSubmission?'Submission':'View only'),el('td',{},_status(h.status||'published'))]));
+      return shell(el('div',{},[enxPage('Homework','Give homework through EduNexa when you choose to use it.',[add]),el('div',{class:'card table-wrap'},[rows.length?_table(['Title','Class','Subject','Due','Mode','Status'],rows):enxEmpty('No homework has been created yet.','📚')]) ]));
+    }
+    if(Ustudent() || Uparent()){
+      let studentId=State.user.uid;
+      if(Urole()==='parent'){
+        const links=(await getDocs(query(col('parentLinks'),where('parentUid','==',State.user.uid),limit(100)))).docs.map(d=>({id:d.id,...d.data()}));
+        const children=[]; for(const l of links){const st=await getDoc(doc(db,'students',l.studentId));if(st.exists())children.push({id:l.studentId,...st.data()});}
+        const cards=[]; for(const st of children){const hw=(await getDocs(query(col('homework'),where('schoolId','==',st.schoolId),where('classId','==',st.classId),limit(100)))).docs.map(d=>({id:d.id,...d.data()})); cards.push(el('div',{class:'card'},[el('h3',{},ENX.fullName(st)),el('p',{},`School: ${st.schoolId||'—'}`),...hw.map(h=>el('div',{class:'card',style:'margin-top:8px'},[el('strong',{},h.title),el('p',{},h.instructions||''),el('small',{},`Due: ${h.dueDate||'—'}`)]))]));}
+        return shell(el('div',{},[enxPage('Homework','Homework from your children’s schools'),cards.length?el('div',{class:'grid grid-2'},cards):enxEmpty('No linked children found.','📚')]));
+      }
+      const st=await getDoc(doc(db,'students',studentId)); const sd=st.exists()?st.data():{}; const hw=await ENX.schoolDocs('homework',[where('classId','==',sd.classId)]);
+      return shell(el('div',{},[enxPage('Homework','Homework assigned to your class'),hw.length?el('div',{class:'grid grid-2'},hw.map(h=>el('div',{class:'card'},[el('h3',{},h.title),el('p',{},h.instructions||''),el('p',{},`Due: ${h.dueDate||'—'}`),el('span',{class:'badge blue'},h.allowSubmission?'Submission enabled':'View only')]))):enxEmpty('No homework available.','📚')]));
+    }
+    return enxEmpty('Homework is available to assigned teachers, students and parents.','📚');
+  }
+
+  async function UviewCalendar(){
+    const g=UfeatureGuard('calendar','Academic Calendar');if(g)return g;
+    const events=await ENX.schoolDocs('calendarEvents',[orderBy('date','asc'),limit(200)]);
+    const add=Uacademic()?enxButton('＋ Add Event',()=>{
+      const title=enxInput('Event title','text',''),date=enxInput('Date','date',Udate()),type=enxSelect('Type',[{value:'academic',label:'Academic'},{value:'holiday',label:'Holiday'},{value:'exam',label:'Exam'},{value:'meeting',label:'Meeting'},{value:'event',label:'School Event'}],'academic'),note=enxTextarea('Notes','');
+      enxModalForm('Add Calendar Event',[{...title,key:'title'},{...date,key:'date'},{...type,key:'type'},{...note,key:'notes'}],'Save',async d=>{if(!d.title||!d.date)throw new Error('Title and date are required');await addDoc(col('calendarEvents'),{schoolId:Uschool(),title:d.title,date:d.date,type:d.type,notes:d.notes,status:'active',createdAt:serverTimestamp(),createdBy:State.user.uid});await audit('calendar.event.created',{schoolId:Uschool(),metadata:{title:d.title,date:d.date}});toast('Calendar event added');navigate('calendar');});
+    }):null;
+    const rows=events.map(e=>el('tr',{},[el('td',{},e.date||'—'),el('td',{},e.title),el('td',{},e.type||'event'),el('td',{},e.notes||'—'),Uacademic()?el('td',{},enxButton('Delete',async()=>{if(!confirm('Delete this event?'))return;await deleteDoc(doc(db,'calendarEvents',e.id));await audit('calendar.event.deleted',{schoolId:Uschool(),targetId:e.id});navigate('calendar');},'btn sm danger')):null]));
+    return shell(el('div',{},[enxPage('Academic Calendar','Visible to parents, teachers and students.',add?[add]:[]),el('div',{class:'card table-wrap'},[rows.length?_table(['Date','Event','Type','Notes','Actions'],rows):enxEmpty('No calendar events yet.','🗓️')]) ]));
+  }
+
+  async function UviewTimetable(exam=false){
+    const feature=exam?'examTimetable':'timetable'; const label=exam?'Exam Timetable':'Timetable'; const g=UfeatureGuard(feature,label);if(g)return g;
+    const extras=[]; if(Uteacher() && !exam) extras.push(where('teacherUid','==',State.user.uid));
+    const items=await ENX.schoolDocs(exam?'examTimetable':'timetable',extras);
+    const add=Uacademic()?enxButton('＋ Add Entry',()=>{
+      const day=enxInput('Day','text','Monday'),date=enxInput(exam?'Exam date':'Date','date',Udate()),start=enxInput('Start time','time','08:00'),end=enxInput('End time','time','09:00'),title=enxInput(exam?'Exam / Subject':'Lesson / Subject','text',''),room=enxInput('Room','text',''),classId=enxInput('Class ID (optional)','text','');
+      enxModalForm('Add '+label,[{...day,key:'day'},{...date,key:'date'},{...start,key:'startTime'},{...end,key:'endTime'},{...title,key:'title'},{...room,key:'room'},{...classId,key:'classId'}],'Save',async d=>{if(!d.title)throw new Error('Title/subject is required');await addDoc(col(exam?'examTimetable':'timetable'),{schoolId:Uschool(),day:d.day,date:d.date,startTime:d.startTime,endTime:d.endTime,title:d.title,room:d.room,classId:d.classId||null,teacherUid:Uteacher()?State.user.uid:null,status:'active',createdAt:serverTimestamp(),createdBy:State.user.uid});await audit((exam?'exam.timetable.created':'timetable.created'),{schoolId:Uschool(),metadata:{title:d.title,date:d.date}});toast(label+' entry added');navigate(exam?'examTimetable':'timetable');});
+    }):null;
+    const rows=items.sort((a,b)=>String(a.date||'').localeCompare(String(b.date||''))).map(x=>el('tr',{},[el('td',{},x.day||'—'),el('td',{},x.date||'—'),el('td',{},`${x.startTime||''}–${x.endTime||''}`),el('td',{},x.title||'—'),el('td',{},x.room||'—'),el('td',{},x.classId||'—'),Uacademic()?el('td',{},enxButton('Delete',async()=>{if(!confirm('Delete this timetable entry?'))return;await deleteDoc(doc(db,exam?'examTimetable':'timetable',x.id));navigate(exam?'examTimetable':'timetable');},'btn sm danger')):null]));
+    return shell(el('div',{},[enxPage(label,exam?'Automatically visible to relevant students, parents and teachers.':'Teaching and class timetable.',add?[add]:[]),el('div',{class:'card table-wrap'},[rows.length?_table(['Day','Date','Time',exam?'Exam':'Lesson','Room','Class','Actions'],rows):enxEmpty('No timetable entries yet.','🕐')]) ]));
+  }
+
+  async function UviewDigitalId(){
+    if(Ustudent()){
+      const st=await getDoc(doc(db,'students',State.user.uid));if(!st.exists())return enxEmpty('Student profile not found.','🪪');const s={id:st.id,...st.data()};
+      return shell(el('div',{},[enxPage('Digital Student ID','Official EduNexa digital identity card'),el('div',{class:'card',style:'max-width:420px;text-align:center'},[el('h2',{},'EDUNEXA'),el('h3',{},ENX.fullName(s)),el('p',{},`Student ID: ${s.studentCode||s.accountCode||s.admissionNumber||s.id}`),el('p',{},`Class: ${s.className||'—'}`),el('p',{},`School: ${State.activeSchool?.name||s.schoolId||'—'}`),el('div',{style:'margin:18px auto;display:flex;justify-content:center'},renderQR(s.studentCode||s.accountCode||s.id)),el('p',{style:'font-size:12px;color:var(--muted)'},'Scan to verify this ID through EduNexa.')]) ]));
+    }
+    if(Uteacher()){
+      const ts=await ENX.schoolDocs('teachers',[where('uid','==',State.user.uid)]);const t=ts[0];if(!t)return enxEmpty('Teacher profile not found.','🪪');
+      return shell(el('div',{},[enxPage('Digital Teacher ID','Official EduNexa digital identity card'),el('div',{class:'card',style:'max-width:420px;text-align:center'},[el('h2',{},'EDUNEXA'),el('h3',{},ENX.fullName(t)),el('p',{},`Teacher ID: ${t.teacherCode||t.accountCode||t.id}`),el('p',{},`Role: ${t.role||'Teacher'}`),el('p',{},`School: ${State.activeSchool?.name||t.schoolId||'—'}`),el('div',{style:'margin:18px auto;display:flex;justify-content:center'},renderQR(t.teacherCode||t.accountCode||t.id)),el('p',{style:'font-size:12px;color:var(--muted)'},'Scan to verify this ID through EduNexa.')]) ]));
+    }
+    return enxEmpty('Digital IDs are available to students and teachers.','🪪');
+  }
+
+  async function UviewFeatureControls(){
+    if(Urole()!=='superAdmin')return scaffoldView('Access denied','Platform Admin access is required.');
+    const schools=(await getDocs(query(col('schools'),orderBy('name','asc'),limit(300)))).docs.map(d=>({id:d.id,...d.data()}));
+    const featureDefs=[['homework','Homework'],['calendar','Academic Calendar'],['timetable','Timetable'],['examTimetable','Exam Timetable'],['digitalIds','Digital IDs'],['qrVerification','QR Verification'],['parentPortal','Parent Portal'],['fees','School Fees'],['certificates','Certificates / Documents']];
+    const rows=schools.map(s=>{
+      const cells=[el('td',{},s.name||s.id)];
+      featureDefs.forEach(([key,label])=>{
+        const on=s.features?.[key]!==false; const b=enxButton(on?'ON':'OFF',async()=>{const next={...(s.features||{}),[key]:!on};await updateDoc(doc(db,'schools',s.id),{features:next,updatedAt:serverTimestamp()});await audit('school.feature.changed',{schoolId:s.id,metadata:{feature:key,enabled:!on}});toast(`${label} ${!on?'enabled':'disabled'} for ${s.name||s.id}`);navigate('featureControls');},'btn sm '+(on?'secondary':'')); cells.push(el('td',{},b));
+      });
+      return el('tr',{},cells);
+    });
+    return shell(el('div',{},[enxPage('School Feature Controls','Platform Admin can enable or disable features for individual schools.'),el('div',{class:'card table-wrap'},[rows.length?_table(['School',...featureDefs.map(x=>x[1])],rows):enxEmpty('No schools found.','🏫')]) ]));
+  }
+
+  async function UviewParentLinking(){
+    if(!Uadmin())return scaffoldView('Access denied','School management access is required.');
+    const students=await ENX.schoolDocs('students');
+    const links=await ENX.schoolDocs('parentLinks');
+    const add=enxButton('＋ Link Existing Parent',()=>{
+      const code=enxInput('Parent Account Code','text','PAR-XXXXXXXX'),student=enxSelect('Student',students.map(s=>({value:s.id,label:`${ENX.fullName(s)} — ${s.admissionNumber||''}`})));
+      enxModalForm('Link Existing Parent Account',[{...code,key:'parentCode'},{...student,key:'studentId'}],'Link',async d=>{
+        const c=normalizeAccountCode(d.parentCode); if(!c)throw new Error('Enter a valid parent account code.');
+        const alias=await getDoc(doc(db,'loginAliases',c));if(!alias.exists())throw new Error('Parent account code was not found. Ask the parent for the exact PAR- code.');
+        const a=alias.data();if(a.role!=='parent' || !a.parentUid)throw new Error('This code is not a linkable parent account.');
+        const child=students.find(x=>x.id===d.studentId);if(!child)throw new Error('Student not found.');
+        const sid=Uschool();const batch=writeBatch(db);
+        batch.set(doc(db,'schoolUsers',`${sid}_${a.parentUid}`),{uid:a.parentUid,schoolId:sid,accountCode:c,role:'parent',status:'active',email:a.authEmail||'',createdAt:serverTimestamp(),createdBy:State.user.uid},{merge:true});
+        batch.set(doc(db,'parentLinks',`${sid}_${a.parentUid}_${d.studentId}`),{schoolId:sid,parentUid:a.parentUid,studentId:d.studentId,studentName:ENX.fullName(child),className:child.className||'',createdAt:serverTimestamp(),createdBy:State.user.uid},{merge:true});
+        await batch.commit();await audit('parent.linked',{schoolId:sid,targetId:a.parentUid,metadata:{studentId:d.studentId}});toast('Parent linked to student. The same parent account can now access this child.');navigate('parentAccounts');
+      });
+    });
+    const rows=links.map(l=>el('tr',{},[el('td',{},l.studentName||l.studentId),el('td',{},l.parentUid||'—'),el('td',{},l.className||'—'),el('td',{},fmtDate(l.createdAt)),el('td',{},enxButton('Unlink',async()=>{if(!confirm('Unlink this parent from this child?'))return;await deleteDoc(doc(db,'parentLinks',l.id));await audit('parent.unlinked',{schoolId:Uschool(),targetId:l.parentUid,metadata:{studentId:l.studentId}});navigate('parentAccounts');},'btn sm danger'))]));
+    return shell(el('div',{},[enxPage('Parent Links','Link an existing parent account to another child or school.',[add]),el('div',{class:'card table-wrap'},[rows.length?_table(['Child','Parent UID','Class','Linked','Actions'],rows):enxEmpty('No parent links yet.','👨‍👩‍👧')]) ]));
+  }
+
+  async function UviewPlatformParentNetwork(){
+    if(Urole()!=='superAdmin')return scaffoldView('Access denied','Platform Admin access is required.');
+    const parents=(await getDocs(query(col('schoolUsers'),where('role','==','parent'),limit(500)))).docs.map(d=>({id:d.id,...d.data()}));
+    const unique=[...new Map(parents.map(p=>[p.uid,p])).values()];
+    const schools=(await getDocs(query(col('schools'),limit(300)))).docs.map(d=>({id:d.id,...d.data()}));
+    const add=enxButton('＋ Cross-School Parent Link',()=>{
+      const parent=enxInput('Parent Account Code','text','PAR-XXXXXXXX'),student=enxInput('Student UID','text','');
+      enxModalForm('Cross-School Parent Link',[{...parent,key:'parentCode'},{...student,key:'studentId'}],'Link',async d=>{
+        const alias=await getDoc(doc(db,'loginAliases',normalizeAccountCode(d.parentCode)));if(!alias.exists())throw new Error('Parent code not found.');const a=alias.data();if(a.role!=='parent'||!a.parentUid)throw new Error('Not a valid parent account.');
+        const st=await getDoc(doc(db,'students',d.studentId.trim()));if(!st.exists())throw new Error('Student UID not found.');const sd=st.data();const sid=sd.schoolId;if(!sid)throw new Error('Student has no school.');
+        const b=writeBatch(db);b.set(doc(db,'schoolUsers',`${sid}_${a.parentUid}`),{uid:a.parentUid,schoolId:sid,accountCode:normalizeAccountCode(d.parentCode),role:'parent',status:'active',email:a.authEmail||'',createdAt:serverTimestamp(),createdBy:State.user.uid},{merge:true});b.set(doc(db,'parentLinks',`${sid}_${a.parentUid}_${d.studentId.trim()}`),{schoolId:sid,parentUid:a.parentUid,studentId:d.studentId.trim(),studentName:ENX.fullName(sd),className:sd.className||'',createdAt:serverTimestamp(),createdBy:State.user.uid},{merge:true});await b.commit();await audit('parent.crossSchool.linked',{schoolId:sid,targetId:a.parentUid,metadata:{studentId:d.studentId.trim()}});toast('Cross-school parent link created.');navigate('parentNetwork');
+      });
+    });
+    const rows=unique.map(p=>el('tr',{},[el('td',{},p.displayName||p.email||p.uid),el('td',{},p.accountCode||'—'),el('td',{},p.email||'—'),el('td',{},schools.filter(s=>parents.some(x=>x.uid===p.uid&&x.schoolId===s.id)).map(s=>s.name||s.id).join(', ')||'—')]));
+    return shell(el('div',{},[enxPage('Parent Network','Manage authorized parent access across schools.',[add]),el('div',{class:'card table-wrap'},[rows.length?_table(['Parent','Code','Email','Schools'],rows):enxEmpty('No parent accounts found.','👨‍👩‍👧')]) ]));
+  }
+
+  async function UparentAwareCalendar(){
+    if(Urole()!=='parent') return UviewCalendar();
+    const links=(await getDocs(query(col('parentLinks'),where('parentUid','==',State.user.uid),limit(100)))).docs.map(d=>({id:d.id,...d.data()}));
+    const rows=[];
+    for(const l of links){
+      const st=await getDoc(doc(db,'students',l.studentId)); if(!st.exists()) continue; const sd=st.data();
+      const ev=(await getDocs(query(col('calendarEvents'),where('schoolId','==',sd.schoolId),limit(200)))).docs.map(d=>({id:d.id,...d.data()}));
+      ev.forEach(e=>rows.push(el('tr',{},[el('td',{},sd.schoolId||'—'),el('td',{},ENX.fullName(sd)),el('td',{},e.date||'—'),el('td',{},e.title||'—'),el('td',{},e.type||'event'),el('td',{},e.notes||'—')])));
+    }
+    return shell(el('div',{},[enxPage('Academic Calendar','Calendar information across your linked children and schools.'),el('div',{class:'card table-wrap'},[rows.length?_table(['School','Child','Date','Event','Type','Notes'],rows):enxEmpty('No calendar events found.','🗓️')]) ]));
+  }
+  async function UparentAwareTimetable(exam=false){
+    if(Urole()!=='parent') return UviewTimetable(exam);
+    const links=(await getDocs(query(col('parentLinks'),where('parentUid','==',State.user.uid),limit(100)))).docs.map(d=>({id:d.id,...d.data()}));
+    const rows=[];
+    for(const l of links){
+      const st=await getDoc(doc(db,'students',l.studentId)); if(!st.exists()) continue; const sd=st.data();
+    }
+    // Build directly from each child's school/class without relying on one active school.
+    for(const l of links){
+      const st=await getDoc(doc(db,'students',l.studentId)); if(!st.exists()) continue; const sd=st.data();
+      const q=await getDocs(query(col(db,exam?'examTimetable':'timetable'),where('schoolId','==',sd.schoolId),where('classId','==',sd.classId),limit(200)));
+      q.docs.map(d=>({id:d.id,...d.data()})).forEach(x=>rows.push(el('tr',{},[el('td',{},sd.schoolId||'—'),el('td',{},ENX.fullName(sd)),el('td',{},x.day||'—'),el('td',{},x.date||'—'),el('td',{},`${x.startTime||''}–${x.endTime||''}`),el('td',{},x.title||'—'),el('td',{},x.room||'—')] )));
+    }
+    const label=exam?'Exam Timetable':'Timetable';
+    return shell(el('div',{},[enxPage(label,'Information for your linked children across schools.'),el('div',{class:'card table-wrap'},[rows.length?_table(['School','Child','Day','Date','Time',exam?'Exam':'Lesson','Room'],rows):enxEmpty('No timetable entries found.','🕐')]) ]));
+  }
+
+  routes.homework=UviewHomework;
+  routes.calendar=UparentAwareCalendar;
+  routes.timetable=()=>UparentAwareTimetable(false);
+  routes.examTimetable=()=>UparentAwareTimetable(true);
+  routes.digitalId=UviewDigitalId;
+  routes.featureControls=UviewFeatureControls;
+  routes.parentLinks=UviewParentLinking;
+  routes.parentNetwork=UviewPlatformParentNetwork;
+
+  const __ultimateBaseNav=navItemsForRole;
+  navItemsForRole=function(){
+    const base=__ultimateBaseNav(); const r=Urole();
+    const add=(route,icon,label)=>{if(!base.some(x=>x[0]===route))base.push([route,icon,label]);};
+    if(r==='superAdmin'){add('featureControls','🎛️','Feature Controls');add('parentNetwork','👨‍👩‍👧','Parent Network');}
+    if(['owner','schoolAdmin','principal','vicePrincipal'].includes(r)){add('calendar','🗓️','Calendar');add('timetable','🕐','Timetable');add('examTimetable','📝','Exam Timetable');add('parentAccounts','👨‍👩‍👧','Parents');add('parentLinks','🔗','Parent Links');}
+    if(r==='teacher'){add('homework','📚','Homework');add('timetable','🕐','Timetable');add('examTimetable','📝','Exam Timetable');add('calendar','🗓️','Calendar');add('digitalId','🪪','Digital ID');}
+    if(r==='student'){add('homework','📚','Homework');add('timetable','🕐','Timetable');add('examTimetable','📝','Exam Timetable');add('calendar','🗓️','Calendar');add('digitalId','🪪','Digital ID');}
+    if(r==='parent'){add('homework','📚','Homework');add('timetable','🕐','Timetable');add('examTimetable','📝','Exam Timetable');add('calendar','🗓️','Calendar');}
+    return base;
+  };
+
+  // Remove invitation-code UX from normal login. The legacy route remains only
+  // for backward compatibility with old links; it does not appear in navigation.
+  routes.redeemInvite=async function(){return shell(el('div',{class:'card'},[el('h2',{},'Invitation codes are no longer required'),el('p',{},'EduNexa now uses School Code + EduNexa Account Code + Password. Get the exact credentials from your school.'),enxButton('Back to Sign In',()=>navigate('login'))]));};
+
+  // New parent accounts expose parentUid in the alias so a school can safely
+  // link that existing parent account to another child/school without creating
+  // a second Firebase Authentication identity.
+  const __parentAccountsUltimate=enxViewParentAccounts;
+  enxViewParentAccounts=async function(){
+    const out=await __parentAccountsUltimate();
+    return out;
+  };
+
+  // If a school has never configured feature flags, all final features remain
+  // enabled by default. Platform Admin can explicitly turn them off.
+})();
+
 </script>
 
 </body>
